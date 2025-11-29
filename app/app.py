@@ -2,8 +2,8 @@ import logging
 import os
 import socket
 
-from flask import Flask, jsonify
-import redis
+from flask import Flask, jsonify, request
+import redis, time
 
 # Configuration basique du logging
 logging.basicConfig(
@@ -73,6 +73,71 @@ def counter():
         ), 200
     except redis.RedisError as exc:  # type: ignore[attr-defined]
         logger.error("Erreur Redis pendant /counter: %s", exc)
+        return jsonify(error="Redis unavailable"), 500
+
+
+@app.route("/limited")
+def limited():
+    ip = request.remote_addr  # adresse de l'utilisateur
+    key = f"rate_limit:{ip}"
+
+    try:
+        # Incrémente le compteur
+        count = redis_client.incr(key)
+
+        # Si c'est le premier appel, on met une expiration de 60 secondes
+        if count == 1:
+            redis_client.expire(key, 60)
+
+        # Limite : 5 requêtes par minute
+        if count > 5:
+            return jsonify(error="Too Many Requests"), 429
+
+        return jsonify(
+            message="Request allowed",
+            remaining_requests=5 - count
+        ), 200
+
+    except redis.RedisError:
+        return jsonify(error="Redis unavailable"), 500
+
+
+@app.route("/slow")
+def slow():
+    """
+    Simule un traitement long (2 secondes).
+    """
+    time.sleep(2)
+    return jsonify(message="Slow response done"), 200
+
+
+@app.route("/slow/cached")
+def slow_cached():
+    cache_key = "slow_result"
+
+    try:
+        # Vérifier si le résultat est en cache
+        cached = redis_client.get(cache_key)
+        if cached:
+            return jsonify(
+                cached=True,
+                result=cached
+            ), 200
+
+        # Sinon exécuter la version lente
+        time.sleep(2)
+        result = "Slow response done"
+
+        # Stocker dans Redis avec une expiration
+        redis_client.set(cache_key, result)
+        redis_client.expire(cache_key, 10)  # expire après 10s
+
+        return jsonify(
+            cached=False,
+            result=result
+        ), 200
+
+    except redis.RedisError:
         return jsonify(error="Redis unavailable"), 500
 
 
