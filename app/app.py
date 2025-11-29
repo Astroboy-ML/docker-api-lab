@@ -42,7 +42,7 @@ def info():
     ), 200
 
 
-# Endpoint de test pour Redis
+# Endpoint de test pour Redis (set/get simple)
 @app.route("/cache-test")
 def cache_test():
     try:
@@ -55,6 +55,24 @@ def cache_test():
         ), 200
     except redis.RedisError as exc:  # type: ignore[attr-defined]
         logger.error("Erreur Redis: %s", exc)
+        return jsonify(error="Redis unavailable"), 500
+
+
+# Endpoint compteur basé sur Redis
+@app.route("/counter")
+def counter():
+    """
+    Incrémente un compteur stocké dans Redis et renvoie sa valeur.
+    Clé utilisée : "visits_counter"
+    """
+    try:
+        logger.info("Incrément du compteur Redis")
+        value = redis_client.incr("visits_counter")  # INCR dans Redis
+        return jsonify(
+            counter=int(value)
+        ), 200
+    except redis.RedisError as exc:  # type: ignore[attr-defined]
+        logger.error("Erreur Redis pendant /counter: %s", exc)
         return jsonify(error="Redis unavailable"), 500
 
 
