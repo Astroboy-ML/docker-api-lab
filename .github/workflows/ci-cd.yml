@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - "v*.*.*"
+      - "v*.*.*"     # tags de version : v1.0.0, v1.1.0...
   pull_request:
     branches:
       - main
@@ -16,7 +16,7 @@ env:
 
 jobs:
   lint_and_test:
-    name: Lint & Tests
+    name: Lint, Tests & Security (Bandit)
     runs-on: ubuntu-latest
 
     steps:
@@ -32,17 +32,43 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest flake8
+          pip install pytest pytest-cov flake8 bandit
 
       - name: Lint avec flake8
         run: flake8 .
 
-      - name: Lancer les tests
-        run: pytest
+      - name: Analyse de sécurité Python (Bandit)
+        run: bandit -r app -ll
+
+      - name: Lancer les tests avec couverture
+        run: |
+          pytest --cov=app --cov-report=term-missing
+
+  security_scan:
+    name: Scan de sécurité Trivy (FS)
+    needs: lint_and_test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installer Trivy
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+          exit-code: "0"     # "1"  pour faire échouer en cas de vulnérabilités
+          format: "table"
 
   build_and_push:
     name: Build & Push Docker image
-    needs: lint_and_test
+    needs:
+      - lint_and_test
+    # tu peux ajouter "security_scan" ici quand tu seras à l’aise :
+    #  - security_scan
     runs-on: ubuntu-latest
 
     permissions:
@@ -66,10 +92,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha
-            type=raw,value=latest
+            type=ref,event=branch        # tag de branche (main)
+            type=ref,event=tag           # tag de version (v1.0.0...)
+            type=sha                     # tag de commit
+            type=raw,value=latest        # latest
 
       - name: Build et push de l'image Docker
         uses: docker/build-push-action@v6
