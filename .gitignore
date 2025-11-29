@@ -1,0 +1,21 @@
+# Environnements virtuels Python
+venv/
+.venv/
+
+# Fichiers Python compilés
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Fichiers de logs
+*.log
+
+# Config éditeur
+.vscode/
+.idea/
+
+# Système
+.DS_Store
+
+# Artefacts
+*.egg-info/

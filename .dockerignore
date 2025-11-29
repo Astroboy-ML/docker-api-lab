@@ -1,0 +1,25 @@
+# Git
+.git
+.gitignore
+
+# Éditeurs
+.vscode
+.idea
+
+# Environnements Python
+venv
+.venv
+__pycache__
+
+# Fichiers Python compilés
+*.pyc
+
+# Logs
+*.log
+
+# Fichiers inutiles
+*.DS_Store
+
+# Ne pas copier ces fichiers dans l'image
+Dockerfile
+Makefile
