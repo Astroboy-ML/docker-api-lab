@@ -162,3 +162,5 @@ python app/app.py
 - Pousser l'image dans un registre (Docker Hub ou GHCR)
 
 ---
+
+# Test déclenchement pipeline
