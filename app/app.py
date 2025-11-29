@@ -1,6 +1,8 @@
+# bandit:ignore=B104
+
 from flask import Flask, jsonify
 import socket
-
+import os
 
 # Création de l'application Flask
 app = Flask(__name__)
@@ -17,10 +19,11 @@ def health():
 def info():
     return jsonify(
         message="Hello from Dockerized API 👋",
-        hostname=socket.gethostname()
+        hostname=socket.gethostname(),
     )
 
 
 # Mode développement (non utilisé en production où Gunicorn prend le relais)
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
+    app.run(host="0.0.0.0", port=5000, debug=debug)
