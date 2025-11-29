@@ -63,4 +63,3 @@ if __name__ == "__main__":
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     logger.info("Lancement de l'application Flask en mode debug=%s", debug)
     app.run(host="0.0.0.0", port=5000, debug=debug)  # nosec B104
-    

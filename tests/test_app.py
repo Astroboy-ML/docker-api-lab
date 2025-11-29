@@ -39,4 +39,3 @@ def test_cache_test_ok(monkeypatch):
     data = response.get_json()
     assert data["message"] == "Cache OK"
     assert data["cached_value"] == "Hello Redis!"
-    
