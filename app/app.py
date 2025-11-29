@@ -3,7 +3,8 @@ import os
 import socket
 
 from flask import Flask, jsonify, request
-import redis, time
+import redis
+import time
 
 # Configuration basique du logging
 logging.basicConfig(
