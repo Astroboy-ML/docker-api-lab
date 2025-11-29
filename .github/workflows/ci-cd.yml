@@ -44,6 +44,30 @@ jobs:
         run: |
           pytest --cov=app --cov-report=term-missing
 
+  dependency_scan:
+    name: Scan des dépendances Python (pip-audit)
+    needs: lint_and_test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer pip-audit et les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit
+
+      - name: Lancer pip-audit (scan des vulnérabilités)
+        # Pour l'instant on ne casse pas le pipeline si des vulnérabilités sont trouvées
+        run: pip-audit -r requirements.txt || true
+
   security_scan:
     name: Scan de sécurité Trivy (FS)
     needs: lint_and_test
@@ -60,15 +84,16 @@ jobs:
           scan-ref: "."
           severity: "CRITICAL,HIGH"
           ignore-unfixed: true
-          exit-code: "0"     # "1"  pour faire échouer en cas de vulnérabilités
+          exit-code: "0"     # Mets "1" plus tard pour faire échouer si vulnérabilités
           format: "table"
 
   build_and_push:
     name: Build & Push Docker image
     needs:
       - lint_and_test
-    # tu peux ajouter "security_scan" ici quand tu seras à l’aise :
-    #  - security_scan
+      # Tu pourras ajouter ceci plus tard si tu veux bloquer sur les scans :
+      # - dependency_scan
+      # - security_scan
     runs-on: ubuntu-latest
 
     permissions:
