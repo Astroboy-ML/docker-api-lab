@@ -42,6 +42,7 @@ jobs:
 
       - name: Lancer les tests avec couverture
         run: |
+          export PYTHONPATH=.
           pytest --cov=app --cov-report=term-missing
 
   dependency_scan:
