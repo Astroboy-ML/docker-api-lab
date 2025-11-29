@@ -41,8 +41,9 @@ RUN useradd -m appuser
 # Installe uniquement les dépendances système nécessaires au runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
- && rm -rf /var/lib/apt/lists/*   # On garde l'image très légère
+ && rm -rf /var/lib/apt/lists/*   
 
+# On garde l'image très légère
 # Copie les wheels générés dans le builder (1er stage)
 COPY --from=builder /wheels /wheels
 
