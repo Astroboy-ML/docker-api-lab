@@ -7,13 +7,31 @@ services:
     ports:
       - "5000:5000"
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       - redis
+    networks:
+      - app_network
 
   redis:
-    image: redis:7
-    container_name: docker-api-redis
+    image: redis:7-alpine
+    container_name: redis
     ports:
       - "6379:6379"
+    networks:
+      - app_network
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: redis-insight
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
