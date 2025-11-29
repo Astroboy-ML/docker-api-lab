@@ -1,81 +1,111 @@
-# 🚀 docker-api-lab
+# 🚀 docker-api-lab – API Flask Dockerisée + CI/CD GitHub Actions + GHCR
 
-> Projet de démonstration DevOps : une API Flask dockerisée proprement avec un Dockerfile multi-stage, un utilisateur non-root, un Makefile et un healthcheck.  
-> Objectif : apprendre, documenter et présenter des bonnes pratiques Docker / Platform Engineering.
+[![CI/CD - Docker API](https://github.com/Astroboy-ML/docker-api-lab/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Astroboy-ML/docker-api-lab/actions/workflows/ci-cd.yml)
+![GHCR Registry](https://img.shields.io/badge/GHCR-astroboy--ml%2Fdocker--api--lab-blue)
+![Python Version](https://img.shields.io/badge/python-3.12-blue)
+![Flask](https://img.shields.io/badge/flask-API-lightgrey)
+![Gunicorn](https://img.shields.io/badge/gunicorn-production-green)
+
+> API Flask conteneurisée avec Docker + exécution en production sous **Gunicorn**, pipeline **CI/CD GitHub Actions**, **tests**, **linting**, **build Docker**, **push vers GHCR**, Makefile et bonnes pratiques de containerisation.
 
 ---
 
 ## 🎯 Objectifs du projet
 
-Ce projet a été réalisé pour :
-
-- Comprendre la **containerisation** d’une application web.
-- Concevoir un **Dockerfile propre et optimisé** (multi-stage build).
-- Utiliser **Gunicorn** comme serveur WSGI de production.
-- Suivre les bonnes pratiques Docker :
-  - user non-root
-  - image minimale
-  - healthcheck
-  - variables d’environnement
-- Automatiser le workflow avec un **Makefile**.
-
----
-
-## 🧱 Stack technique
-
-| Composant      | Version / Info |
-|----------------|----------------|
-| **Python**     | 3.12 |
-| **Flask**      | API minimale |
-| **Gunicorn**   | Serveur WSGI de production |
-| **Docker**     | Multi-stage + best practices |
-| **Makefile**   | Automatisation des commandes |
-| **OS**         | Ubuntu (VM VirtualBox + VS Code Remote SSH) |
+- Développer et containeriser une API Flask simple mais propre  
+- Utiliser un **Dockerfile multi-stage** optimisé  
+- Exécuter l’app en production avec **Gunicorn**  
+- Appliquer les bonnes pratiques :  
+  - image slim  
+  - utilisateur non-root  
+  - healthcheck  
+  - séparation builder/runtime  
+- Mettre en place une **CI/CD complète** :
+  - Lint (flake8)
+  - Tests (pytest)
+  - Build & push Docker
+  - Tags automatiques (`latest`, `main`, `sha`)
+- Publier l’image dans **GitHub Container Registry (GHCR)**  
+- Fournir un workflow dev avec **Makefile**
 
 ---
 
-## 📂 Structure du projet
+## 🧱 Stack Technique
+
+| Composant | Rôle |
+|----------|------|
+| Python 3.12 | Langage backend |
+| Flask | API minimaliste |
+| Gunicorn | Serveur WSGI de production |
+| Docker (multi-stage) | Conteneurisation optimisée |
+| GHCR | Registry privé/public |
+| GitHub Actions | CI/CD |
+| flake8 | Linter |
+| pytest | Tests |
+| Makefile | Automatisation |
+
+---
+
+## 📁 Structure du Projet
 
 ```text
 docker-api-lab/
 ├── app/
-│   ├── app.py           # API Flask (2 endpoints)
-│   └── __init__.py      # Module Python
-├── Dockerfile           # Dockerfile multi-stage avec healthcheck
-├── Makefile             # Automatisation build/run/logs/clean
-├── requirements.txt     # Dépendances Python
-├── .dockerignore        # Optimisation du contexte Docker
-└── .gitignore           # Fichiers à ignorer pour Git
+│   ├── app.py           # API Flask : /health + /info
+│   └── __init__.py
+├── tests/
+│   └── test_example.py  # Tests pytest
+├── Dockerfile           # Dockerfile multi-stage (prod-ready)
+├── Makefile             # build/run/shell/logs
+├── requirements.txt     # Dépendances
+├── .dockerignore
+├── .gitignore
+└── .github/
+    └── workflows/
+        └── ci-cd.yml    # Pipeline CI/CD GitHub Actions
 ```
 
 ---
 
-## 🌐 Endpoints
+## 🌐 Endpoints de l’API
 
-| Méthode | URL        | Description |
-|---------|------------|-------------|
-| GET | `/health` | Vérifie que l’API fonctionne |
-| GET | `/info`   | Donne un message + hostname du container |
+### 🔵 GET `/health`
+```json
+{"status": "ok"}
+```
+
+### 🔵 GET `/info`
+Retourne un message + le hostname du conteneur.
+```json
+{
+  "message": "Hello from Dockerized API 🔥",
+  "hostname": "<container-hostname>"
+}
+```
 
 ---
 
-## 🐳 Docker : build & run
+## 🐳 Utilisation avec Docker (image GHCR)
 
-### 🔧 Build de l’image
+Image publiée automatiquement :
 
-```bash
-make build
+```
+ghcr.io/astroboy-ml/docker-api-lab:latest
 ```
 
-### ▶️ Lancer le container
+### 1️⃣ Pull de l’image
 
 ```bash
-make run
+docker pull ghcr.io/astroboy-ml/docker-api-lab:latest
 ```
 
-Le container écoute sur **port 5000** (configurable via `${APP_PORT}`).
+### 2️⃣ Exécution du conteneur
 
-### 🧪 Tester l’API
+```bash
+docker run -p 5000:5000 ghcr.io/astroboy-ml/docker-api-lab:latest
+```
+
+### 3️⃣ Tests
 
 ```bash
 curl http://localhost:5000/health
@@ -84,83 +114,82 @@ curl http://localhost:5000/info
 
 ---
 
-## ⚙️ Détails sur le Dockerfile
+## ⚙️ CI/CD GitHub Actions
 
-Le Dockerfile utilise un **multi-stage build** :
+Pipeline : `.github/workflows/ci-cd.yml`
 
-### 🏗️ **Stage 1 — Builder**
-- Installe les dépendances de build (compilation).
-- Génère des *wheels* Python (install plus rapide).
-- Cette image ne sera **pas** utilisée au runtime.
+Déclencheurs :
 
-### 📦 **Stage 2 — Runtime**
-- Image minimale (`python:3.12-slim`).
-- Installation uniquement du strict nécessaire.
-- User non-root : `appuser`.
-- Endpoints exposés.
-- **Healthcheck intégré** :
-  ```Dockerfile
-  HEALTHCHECK CMD curl -f http://localhost:${APP_PORT}/health || exit 1
-  ```
+- push sur `main`
+- PR vers `main`
+- tags `v*.*.*`
 
-### ⚡ Résultats
-- Image **plus légère**  
-- Surface d’attaque **réduite**  
-- Déploiement **plus rapide**  
-- Standards production **respectés**
+### Étapes du pipeline
 
----
+#### 1️⃣ Lint & Tests
+- flake8  
+- pytest  
 
-## 🛠️ Makefile : commandes disponibles
+#### 2️⃣ Build & Push Docker
+- login GHCR  
+- génération tags  
+- build Docker  
+- push GHCR  
 
-```bash
-make build     # Build de l'image Docker
-make run       # Lance le container en detach
-make logs      # Affiche les logs en temps réel
-make shell     # Ouvre un bash dans le container
-make stop      # Stop + supprime le container
-make clean     # Supprime container + image
-```
+Tags générés :
+
+- `latest`
+- `main`
+- `sha-xxxxxx`
+- `vX.Y.Z` (si tag)
 
 ---
 
-## 🧪 Exécuter l’app sans Docker (mode dev)
+## 🧪 Tests & Lint en local
 
 ```bash
-python -m venv venv
-source venv/bin/activate
 pip install -r requirements.txt
-python app/app.py
+pip install pytest flake8
+
+flake8 .
+pytest
 ```
 
 ---
 
-## 🧠 Mémo : comment refaire ce projet de zéro
+## 🛠️ Makefile
 
-1. Installer Docker sur une VM Ubuntu  
-2. Cloner ce repo :
-   ```bash
-   git clone git@github.com:<ton-username>/docker-api-lab.git
-   ```
-3. Build et run :
-   ```bash
-   make build
-   make run
-   ```
-4. Tester avec :
-   ```bash
-   curl http://localhost:5000/health
-   ```
+```bash
+make build     # Build image
+make run       # Run container
+make logs      # Logs temps réel
+make shell     # Shell dans le container
+make stop      # Stop container
+make clean     # Supprime image + container
+```
 
 ---
 
-## 📌 Pistes d'amélioration
+## 🔄 Workflow global
 
-- Ajouter des tests unitaires (pytest)
-- Ajouter un Docker Compose
-- Ajouter un pipeline CI/CD (GitHub Actions)
-- Pousser l'image dans un registre (Docker Hub ou GHCR)
+```text
+Dev → git push main
+        ↓
+GitHub Actions CI
+        ↓ Lint + Tests (flake8/pytest)
+        ↓ Build Docker
+        ↓ Push GHCR
+User → docker pull + docker run
+```
 
 ---
 
-# Test déclenchement pipeline
+## 🚀 Améliorations futures
+
+- Test coverage  
+- Analyse statique (bandit)  
+- Scan vulnérabilités (Trivy)  
+- Multi-architecture build  
+- Déploiement auto (Fly.io / Render / Railway)  
+- Semantic Release (versioning auto)
+
