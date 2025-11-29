@@ -1,5 +1,3 @@
-# bandit:ignore=B104
-
 from flask import Flask, jsonify
 import socket
 import os
@@ -26,4 +24,4 @@ def info():
 # Mode développement (non utilisé en production où Gunicorn prend le relais)
 if __name__ == "__main__":
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-    app.run(host="0.0.0.0", port=5000, debug=debug)
+    app.run(host="0.0.0.0", port=5000, debug=debug)  # nosec B104
