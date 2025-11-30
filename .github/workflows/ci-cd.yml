@@ -12,8 +12,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
+  # IMPORTANT : github.repository_owner est déjà en minuscules
+  # => astroboy-ml/docker-api-lab (nom d'image Docker valide)
   IMAGE_NAME: ${{ github.repository_owner }}/docker-api-lab
-
 
 jobs:
   lint_and_test:
@@ -47,7 +48,7 @@ jobs:
 
       - name: Scan des dépendances Python (pip-audit)
         run: |
-          pip-audit --ignore-vuln GHSA-xxxx-xxxx-xxxx || true
+          pip-audit || true   # on ne casse pas la CI pour l'instant
 
   security_scan_fs:
     name: Scan de sécurité Trivy (FS)
@@ -129,6 +130,7 @@ jobs:
       - name: Scan Trivy de l'image Docker
         uses: aquasecurity/trivy-action@0.28.0
         with:
+          # On scanne ghcr.io/astroboy-ml/docker-api-lab:latest
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
