@@ -12,7 +12,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: docker-api-lab
+  # Nom du repo d'image, entièrement en minuscules
+  IMAGE_REPOSITORY: astroboy-ml/docker-api-lab
 
 jobs:
   lint_and_test:
@@ -93,7 +94,8 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          # Repo d'image complet, déjà en minuscules
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}
           flavor: |
             latest=true
           tags: |
@@ -129,10 +131,10 @@ jobs:
       - name: Scan Trivy de l'image Docker
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ steps.meta.outputs.tags }}
+          # On scanne l'image qu'on vient de pousser, tag "latest"
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
           ignore-unfixed: true
           format: "table"
           exit-code: "0"
-
