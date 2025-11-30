@@ -5,14 +5,13 @@ on:
     branches:
       - main
     tags:
-      - "v*.*.*"     # tags de version : v1.0.0, v1.1.0...
+      - "v*.*.*"
   pull_request:
     branches:
       - main
 
 env:
   REGISTRY: ghcr.io
-  # Nom du repo d'image, entièrement en minuscules
   IMAGE_REPOSITORY: astroboy-ml/docker-api-lab
 
 jobs:
@@ -47,7 +46,7 @@ jobs:
 
       - name: Scan des dépendances Python (pip-audit)
         run: |
-          pip-audit || true   # on ne casse pas la CI pour l'instant
+          pip-audit || true
 
   security_scan_fs:
     name: Scan de sécurité Trivy (FS)
@@ -66,10 +65,10 @@ jobs:
           severity: "CRITICAL,HIGH"
           ignore-unfixed: true
           format: "table"
-          exit-code: "0"  # mettre "1" plus tard si tu veux faire échouer le job
+          exit-code: "0"
 
   build_and_push:
-    name: Build & Push Docker image
+    name: Build & Push Docker image (GHCR + AWS ECR)
     needs:
       - lint_and_test
       - security_scan_fs
@@ -83,6 +82,7 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
+      # --- GHCR LOGIN & PUSH ---
       - name: Login à GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -94,7 +94,6 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          # Repo d'image complet, déjà en minuscules
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}
           flavor: |
             latest=true
@@ -103,13 +102,46 @@ jobs:
             type=ref,event=tag
             type=sha
 
-      - name: Build et push de l'image Docker
+      - name: Build et push de l'image Docker vers GHCR
+        id: build-ghcr
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      # --- AWS ECR LOGIN & PUSH ---
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Tag image pour Amazon ECR
+        run: |
+          ECR_REGISTRY=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          ECR_REPOSITORY=${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG=${{ github.sha }}
+
+          # On retague l'image GHCR construite par docker/build-push-action
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Push image vers ECR
+        run: |
+          ECR_REGISTRY=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+          ECR_REPOSITORY=${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG=${{ github.sha }}
+
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
   trivy_image_scan:
     name: Scan de l'image Docker (Trivy)
@@ -131,7 +163,6 @@ jobs:
       - name: Scan Trivy de l'image Docker
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          # On scanne l'image qu'on vient de pousser, tag "latest"
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
