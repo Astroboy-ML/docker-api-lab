@@ -1,6 +1,10 @@
 # 🚀 docker-api-lab
 
 [![CI/CD - Docker API](https://github.com/Astroboy-ML/docker-api-lab/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Astroboy-ML/docker-api-lab/actions/workflows/ci-cd.yml)
+![GHCR Registry](https://img.shields.io/badge/GHCR-astroboy--ml%2Fdocker--api--lab-blue)
+![Python Version](https://img.shields.io/badge/python-3.12-blue)
+![Flask](https://img.shields.io/badge/flask-API-lightgrey)
+![Gunicorn](https://img.shields.io/badge/gunicorn-production-green)
 
 > Projet complet DevOps / Platform Engineering : API Flask + Redis, Docker multi-stage, Makefile, Docker Compose, CI/CD GitHub Actions, scans de sécurité Trivy & pip-audit.  
 > Conçu comme un **projet portfolio** démontrant les compétences essentielles d’un Platform Engineer moderne.
