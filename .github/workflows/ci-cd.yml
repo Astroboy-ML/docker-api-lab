@@ -12,9 +12,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # IMPORTANT : github.repository_owner est déjà en minuscules
-  # => astroboy-ml/docker-api-lab (nom d'image Docker valide)
-  IMAGE_NAME: ${{ github.repository_owner }}/docker-api-lab
+  IMAGE_NAME: docker-api-lab
 
 jobs:
   lint_and_test:
@@ -95,12 +93,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          flavor: |
+            latest=true
           tags: |
-            type=ref,event=branch        # tag de branche (main)
-            type=ref,event=tag           # tag de version (v1.0.0...)
-            type=sha                     # tag de commit
-            type=raw,value=latest        # latest
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha
 
       - name: Build et push de l'image Docker
         uses: docker/build-push-action@v6
