@@ -1,195 +1,209 @@
-# 🚀 docker-api-lab – API Flask Dockerisée + CI/CD GitHub Actions + GHCR
+# 🚀 docker-api-lab
 
 [![CI/CD - Docker API](https://github.com/Astroboy-ML/docker-api-lab/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Astroboy-ML/docker-api-lab/actions/workflows/ci-cd.yml)
-![GHCR Registry](https://img.shields.io/badge/GHCR-astroboy--ml%2Fdocker--api--lab-blue)
-![Python Version](https://img.shields.io/badge/python-3.12-blue)
-![Flask](https://img.shields.io/badge/flask-API-lightgrey)
-![Gunicorn](https://img.shields.io/badge/gunicorn-production-green)
 
-> API Flask conteneurisée avec Docker + exécution en production sous **Gunicorn**, pipeline **CI/CD GitHub Actions**, **tests**, **linting**, **build Docker**, **push vers GHCR**, Makefile et bonnes pratiques de containerisation.
+> Projet complet DevOps / Platform Engineering : API Flask + Redis, Docker multi-stage, Makefile, Docker Compose, CI/CD GitHub Actions, scans de sécurité Trivy & pip-audit.  
+> Conçu comme un **projet portfolio** démontrant les compétences essentielles d’un Platform Engineer moderne.
 
 ---
 
-## 🎯 Objectifs du projet
+# 🎯 Objectifs du projet
 
-- Développer et containeriser une API Flask simple mais propre  
+## 🔹 Objectifs techniques
+- Développer et containeriser une **API Flask simple mais propre**  
 - Utiliser un **Dockerfile multi-stage** optimisé  
-- Exécuter l’app en production avec **Gunicorn**  
-- Appliquer les bonnes pratiques :  
-  - image slim  
-  - utilisateur non-root  
-  - healthcheck  
-  - séparation builder/runtime  
-- Mettre en place une **CI/CD complète** :
-  - Lint (flake8)
-  - Tests (pytest)
-  - Build & push Docker
-  - Tags automatiques (`latest`, `main`, `sha`)
-- Publier l’image dans **GitHub Container Registry (GHCR)**  
-- Fournir un workflow dev avec **Makefile**
+- Exécuter l'app en mode production avec **Gunicorn**  
+- Mettre en place les bonnes pratiques Docker :  
+  - image minimaliste (`python:slim`)  
+  - utilisateur **non-root**  
+  - `HEALTHCHECK` intégré  
+  - séparation complète **builder / runtime**  
+- Ajouter un service Redis pour manipuler un compteur via `/counter`  
+- Créer un environnement multi-services avec **Docker Compose**
+
+## 🔹 Objectifs DevOps / Platform Engineer
+- Mettre en place une **CI/CD complète** avec GitHub Actions :  
+  - Lint (flake8)  
+  - Tests (pytest + coverage)  
+  - Analyse de sécurité (Bandit)  
+  - Scan dépendances Python (pip-audit)  
+  - Scan filesystem (Trivy FS)  
+  - Build & push Docker  
+  - Tags automatiques : `latest`, `main`, `sha`  
+- Publier automatiquement l’image Docker dans **GitHub Container Registry (GHCR)**  
+- Fournir un workflow de développement ergonomique via un **Makefile**
 
 ---
 
-## 🧱 Stack Technique
+# 🧭 Schéma global du workflow CI/CD
 
-| Composant | Rôle |
-|----------|------|
-| Python 3.12 | Langage backend |
-| Flask | API minimaliste |
-| Gunicorn | Serveur WSGI de production |
-| Docker (multi-stage) | Conteneurisation optimisée |
-| GHCR | Registry privé/public |
-| GitHub Actions | CI/CD |
-| flake8 | Linter |
-| pytest | Tests |
-| Makefile | Automatisation |
+```
+                     ┌────────────────────────┐
+                     │        Git Push        │
+                     └────────────┬───────────┘
+                                  │
+                                  ▼
+                    ┌───────────────────────────┐
+                    │ 1. Lint & Tests           │
+                    │ - flake8                  │
+                    │ - pytest + coverage       │
+                    │ - bandit                  │
+                    └────────────┬──────────────┘
+                                 │
+                                 ▼
+                  ┌──────────────────────────────┐
+                  │ 2. Sécurité dépendances      │
+                  │ - pip-audit                  │
+                  │ - trivy fs                   │
+                  └─────────────┬────────────────┘
+                                │
+                                ▼
+                ┌──────────────────────────────────┐
+                │ 3. Build & Push Docker           │
+                │ - docker/metadata-action         │
+                │ - build-push-action              │
+                │ => ghcr.io/astroboy-ml/docker-api│
+                └──────────────┬───────────────────┘
+                               │
+                               ▼
+              ┌──────────────────────────────────────┐
+              │ 4. Scan Trivy de l'image Docker      │
+              │ - trivy image                        │
+              │ - vuln OS + libs Python              │
+              └──────────────────────────────────────┘
+```
 
 ---
 
-## 📁 Structure du Projet
+# 🧱 Stack technique
+
+| Composant      | Version / Info |
+|----------------|----------------|
+| **Python**     | 3.11 |
+| **Flask**      | API minimaliste |
+| **Gunicorn**   | Serveur WSGI (prod) |
+| **Redis**      | Cache / compteur |
+| **Docker**     | Multi-stage |
+| **Docker Compose** | Multi-services |
+| **GitHub Actions** | CI/CD |
+| **Trivy** | Sécurité |
+| **pip-audit** | Analyse dépendances |
+
+---
+
+# 📂 Structure du projet
 
 ```text
 docker-api-lab/
 ├── app/
-│   ├── app.py           # API Flask : /health + /info
+│   ├── app.py               # Code Flask + Redis
 │   └── __init__.py
 ├── tests/
-│   └── test_example.py  # Tests pytest
-├── Dockerfile           # Dockerfile multi-stage (prod-ready)
-├── Makefile             # build/run/shell/logs
-├── requirements.txt     # Dépendances
+│   └── test_app.py          # Tests unitaires pytest
+├── Dockerfile               # Multi-stage optimisé
+├── docker-compose.yml       # API + Redis
+├── requirements.txt         # Dépendances Python
+├── Makefile                 # Commandes outils
 ├── .dockerignore
 ├── .gitignore
-└── .github/
-    └── workflows/
-        └── ci-cd.yml    # Pipeline CI/CD GitHub Actions
+└── .github/workflows/
+    └── ci-cd.yml            # Pipeline CI/CD complet
 ```
 
 ---
 
-## 🌐 Endpoints de l’API
+# 🌐 Endpoints API
 
-### 🔵 GET `/health`
-```json
-{"status": "ok"}
-```
-
-### 🔵 GET `/info`
-Retourne un message + le hostname du conteneur.
-```json
-{
-  "message": "Hello from Dockerized API 🔥",
-  "hostname": "<container-hostname>"
-}
-```
+| Méthode | URL | Description |
+|--------|-----|-------------|
+| GET | `/health` | Healthcheck |
+| GET | `/info` | Message + hostname du container |
+| GET | `/counter` | Incrémente un compteur Redis |
 
 ---
 
-## 🐳 Utilisation avec Docker (image GHCR)
+# 🐳 Docker : Build & Run
 
-Image publiée automatiquement :
-
-```
-ghcr.io/astroboy-ml/docker-api-lab:latest
-```
-
-### 1️⃣ Pull de l’image
+### 🔧 Build
 
 ```bash
-docker pull ghcr.io/astroboy-ml/docker-api-lab:latest
+make build
 ```
 
-### 2️⃣ Exécution du conteneur
+### ▶️ Run
 
 ```bash
-docker run -p 5000:5000 ghcr.io/astroboy-ml/docker-api-lab:latest
+make run
 ```
 
-### 3️⃣ Tests
+### Test
 
 ```bash
 curl http://localhost:5000/health
 curl http://localhost:5000/info
+curl http://localhost:5000/counter
 ```
 
 ---
 
-## ⚙️ CI/CD GitHub Actions
+# 🧪 Docker Compose (API + Redis)
 
-Pipeline : `.github/workflows/ci-cd.yml`
+```bash
+docker compose up -d
+```
 
-Déclencheurs :
+---
 
-- push sur `main`
-- PR vers `main`
-- tags `v*.*.*`
+# ⚙️ Pipeline CI/CD
 
-### Étapes du pipeline
-
-#### 1️⃣ Lint & Tests
+### ✔️ Lint & Sécurité
 - flake8  
-- pytest  
+- Bandit  
+- pip-audit  
 
-#### 2️⃣ Build & Push Docker
-- login GHCR  
-- génération tags  
-- build Docker  
-- push GHCR  
+### ✔️ Tests
+- pytest + coverage
 
-Tags générés :
+### ✔️ Build & Publish
+- Docker multi-stage  
+- Tags multiples (`sha`, `latest`, `main`)  
+- GHCR registry  
 
-- `latest`
-- `main`
-- `sha-xxxxxx`
-- `vX.Y.Z` (si tag)
+### ✔️ Scans
+- trivy fs  
+- trivy image  
 
 ---
 
-## 🧪 Tests & Lint en local
+# 🛠️ Makefile
 
 ```bash
-pip install -r requirements.txt
-pip install pytest flake8
-
-flake8 .
-pytest
+make build
+make run
+make stop
+make logs
+make shell
+make clean
 ```
 
 ---
 
-## 🛠️ Makefile
+# 🚀 Déploiement (coming soon)
 
-```bash
-make build     # Build image
-make run       # Run container
-make logs      # Logs temps réel
-make shell     # Shell dans le container
-make stop      # Stop container
-make clean     # Supprime image + container
-```
+Prochaine étape : déploiement automatique sur VM / Cloud.
 
 ---
 
-## 🔄 Workflow global
+# 📌 Idées d'amélioration
 
-```text
-Dev → git push main
-        ↓
-GitHub Actions CI
-        ↓ Lint + Tests (flake8/pytest)
-        ↓ Build Docker
-        ↓ Push GHCR
-User → docker pull + docker run
-```
+- Reverse proxy : Traefik / Nginx  
+- Monitoring Prometheus + Grafana  
+- GitOps (ArgoCD)  
+- Système de logs avancé  
+- Intégration TDD / tests e2e  
 
 ---
 
-## 🚀 Améliorations futures
+# 👨‍💻 Auteur
 
-- Test coverage  
-- Analyse statique (bandit)  
-- Scan vulnérabilités (Trivy)  
-- Multi-architecture build  
-- Déploiement auto (Fly.io / Render / Railway)  
-- Semantic Release (versioning auto)
-
+Projet développé dans une démarche d’apprentissage DevOps & Platform Engineering.
