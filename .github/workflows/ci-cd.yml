@@ -124,24 +124,28 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Tag image pour Amazon ECR
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_REPOSITORY: ${{ env.IMAGE_REPOSITORY }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          ECR_REGISTRY=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-          ECR_REPOSITORY=${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG=${{ github.sha }}
+          # On récupère l'image depuis GHCR
+          docker pull ${REGISTRY}/${IMAGE_REPOSITORY}:latest
 
-          # On retague l'image GHCR construite par docker/build-push-action
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          # On la retague pour ECR
+          docker tag ${REGISTRY}/${IMAGE_REPOSITORY}:latest ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
+          docker tag ${REGISTRY}/${IMAGE_REPOSITORY}:latest ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
 
       - name: Push image vers ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          ECR_REGISTRY=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-          ECR_REPOSITORY=${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG=${{ github.sha }}
-
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
+          docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
 
   trivy_image_scan:
     name: Scan de l'image Docker (Trivy)
