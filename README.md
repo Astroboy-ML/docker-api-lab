@@ -1,213 +1,234 @@
-# 🚀 docker-api-lab
+# 🚀 docker-api-lab — Professional DevOps & Cloud-Native Project
 
 [![CI/CD - Docker API](https://github.com/Astroboy-ML/docker-api-lab/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Astroboy-ML/docker-api-lab/actions/workflows/ci-cd.yml)
-![GHCR Registry](https://img.shields.io/badge/GHCR-astroboy--ml%2Fdocker--api--lab-blue)
+![AWS ECS](https://img.shields.io/badge/AWS-ECS%20Fargate-orange)
+![Docker](https://img.shields.io/badge/Docker-Multi--Stage-blue)
+![GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-lightgrey)
 ![Python Version](https://img.shields.io/badge/python-3.12-blue)
 ![Flask](https://img.shields.io/badge/flask-API-lightgrey)
 ![Gunicorn](https://img.shields.io/badge/gunicorn-production-green)
 
-> Projet complet DevOps / Platform Engineering : API Flask + Redis, Docker multi-stage, Makefile, Docker Compose, CI/CD GitHub Actions, scans de sécurité Trivy & pip-audit.  
-> Conçu comme un **projet portfolio** démontrant les compétences essentielles d’un Platform Engineer moderne.
+> This project demonstrates a **full Cloud-Native & Platform Engineering workflow**, including:
+> - Flask API + Redis  
+> - Docker multi-stage build  
+> - Local multi-service orchestration (docker-compose)  
+> - CI/CD GitHub Actions  
+> - Security scanning (Bandit, pip-audit, Trivy)  
+> - Automatic container build & push  
+> - Automated **AWS ECS Fargate deployment**  
+> - CloudWatch logging + IAM roles  
+>  
+> The goal: **demonstrate end‑to‑end DevOps & Cloud platform skills** with production‑grade patterns.
 
 ---
 
-# 🎯 Objectifs du projet
+# 🧭 Global Overview
 
-## 🔹 Objectifs techniques
-- Développer et containeriser une **API Flask simple mais propre**  
-- Utiliser un **Dockerfile multi-stage** optimisé  
-- Exécuter l'app en mode production avec **Gunicorn**  
-- Mettre en place les bonnes pratiques Docker :  
-  - image minimaliste (`python:slim`)  
-  - utilisateur **non-root**  
-  - `HEALTHCHECK` intégré  
-  - séparation complète **builder / runtime**  
-- Ajouter un service Redis pour manipuler un compteur via `/counter`  
-- Créer un environnement multi-services avec **Docker Compose**
+This project covers **ALL core skills** of a modern Platform Engineer:
 
-## 🔹 Objectifs DevOps / Platform Engineer
-- Mettre en place une **CI/CD complète** avec GitHub Actions :  
-  - Lint (flake8)  
-  - Tests (pytest + coverage)  
-  - Analyse de sécurité (Bandit)  
-  - Scan dépendances Python (pip-audit)  
-  - Scan filesystem (Trivy FS)  
-  - Build & push Docker  
-  - Tags automatiques : `latest`, `main`, `sha`  
-- Publier automatiquement l’image Docker dans **GitHub Container Registry (GHCR)**  
-- Fournir un workflow de développement ergonomique via un **Makefile**
+- API engineering  
+- Containerization & orchestration  
+- CI/CD automation  
+- Cloud deployment (AWS ECS Fargate)  
+- Security & best practices  
+- Documentation & reproducible workflows  
 
 ---
 
-# 🧭 Schéma global du workflow CI/CD
+# 🏗️ Architecture — Global View (Cloud + Local)
 
 ```
-                     ┌────────────────────────┐
-                     │        Git Push        │
-                     └────────────┬───────────┘
+                              ┌───────────────────────────────┐
+                              │           Developer           │
+                              │      VS Code / Makefile       │
+                              └───────────────┬───────────────┘
+                                              │
+                                Local testing │ docker compose
+                                              ▼
+                   ┌────────────────────────────────────────────────┐
+                   │                Local Environment               │
+                   │                                                │
+                   │   ┌──────────────┐     ┌──────────────┐        │
+                   │   │ Flask API    │<--->│    Redis      │       │
+                   │   │  Gunicorn    │     └──────────────┘        │
+                   │   └──────────────┘            ▲                │
+                   │            │                   │               │
+                   │   ┌────────▼─────────┐         │               │
+                   │   │ RedisInsight GUI │─────────┘               │
+                   │   └──────────────────┘                         │
+                   └────────────────────────────────────────────────┘
+
+                                      Git Push
+                                         │
+                                         ▼
+
+                          ┌─────────────────────────────────────┐
+                          │          GitHub Actions             │
+                          │   CI/CD: test → scan → build → push │
+                          └───────────────┬─────────────────────┘
+                                          │
+                                  Docker Image pushed
+                                          │
+                                          ▼
+
+                       ┌──────────────────────────────────────────┐
+                       │                 AWS Cloud                │
+                       │                                          │
+                       │  ┌──────────────┐   ┌────────────────┐   │
+                       │  │ AWS ECR      │   │ CloudWatch Logs│   │
+                       │  │ image store  │   └────────────────┘   │
+                       │  └──────┬───────┘            ▲           │
+                       │         │                    │           │
+                       │  ┌──────▼─────────┐   logs   │           │
+                       │  │ ECS Fargate     │─────────┘           │
+                       │  │ Container Task  │                     │
+                       │  └─────────────────┘                     │
+                       └──────────────────────────────────────────┘
+```
+
+---
+
+# 🚦 CI/CD Pipeline — Professional Diagram
+
+```
+                    ┌─────────────────────────┐
+                    │         Developer       │
+                    │        git push         │
+                    └─────────────┬───────────┘
                                   │
                                   ▼
-                    ┌───────────────────────────┐
-                    │ 1. Lint & Tests           │
-                    │ - flake8                  │
-                    │ - pytest + coverage       │
-                    │ - bandit                  │
-                    └────────────┬──────────────┘
+                 ┌────────────────────────────────┐
+                 │    GitHub Actions Pipeline     │
+                 └────────────────┬───────────────┘
+                                  │
+     ┌────────────────────────────▼───────────────────────────────┐
+     │                         CI Phase                           │
+     │────────────────────────────────────────────────────────────│
+     │ Lint      → flake8                                         │
+     │ Tests     → pytest + coverage                              │
+     │ Security  → bandit, pip‑audit, trivy filesystem            │
+     └────────────────────────────┬───────────────────────────────┘
+                                  │
+                                  ▼
+             ┌─────────────────────────────────────────────┐
+             │               Docker Build                  │
+             │        Multi-stage Dockerfile build         │
+             └───────────────────┬─────────────────────────┘
                                  │
                                  ▼
-                  ┌──────────────────────────────┐
-                  │ 2. Sécurité dépendances      │
-                  │ - pip-audit                  │
-                  │ - trivy fs                   │
-                  └─────────────┬────────────────┘
-                                │
-                                ▼
-                ┌──────────────────────────────────┐
-                │ 3. Build & Push Docker           │
-                │ - docker/metadata-action         │
-                │ - build-push-action              │
-                │ => ghcr.io/astroboy-ml/docker-api│
-                └──────────────┬───────────────────┘
-                               │
-                               ▼
-              ┌──────────────────────────────────────┐
-              │ 4. Scan Trivy de l'image Docker      │
-              │ - trivy image                        │
-              │ - vuln OS + libs Python              │
-              └──────────────────────────────────────┘
+             ┌─────────────────────────────────────────────┐
+             │         Push to GHCR (Container Registry)   │
+             └───────────────────┬─────────────────────────┘
+                                 │
+                                 ▼
+             ┌─────────────────────────────────────────────┐
+             │            CD Phase — AWS Deployment        │
+             │  - Update ECS Task Definition               │
+             │  - Force new deployment                     │
+             └───────────────────┬─────────────────────────┘
+                                 │
+                                 ▼
+                        ┌────────────────┐
+                        │ ECS Fargate    │
+                        │ Running API    │
+                        └────────────────┘
 ```
 
 ---
 
-# 🧱 Stack technique
+# 🧱 Stack Technique
 
-| Composant      | Version / Info |
-|----------------|----------------|
-| **Python**     | 3.11 |
-| **Flask**      | API minimaliste |
-| **Gunicorn**   | Serveur WSGI (prod) |
-| **Redis**      | Cache / compteur |
-| **Docker**     | Multi-stage |
-| **Docker Compose** | Multi-services |
-| **GitHub Actions** | CI/CD |
-| **Trivy** | Sécurité |
-| **pip-audit** | Analyse dépendances |
+| Domain | Component |
+|--------|-----------|
+| Language | Python 3.12 |
+| Framework | Flask |
+| Webserver | Gunicorn |
+| Cache | Redis |
+| Local Orchestration | Docker Compose |
+| Container Build | Docker multi-stage |
+| CI/CD | GitHub Actions |
+| Cloud | AWS ECS Fargate + ECR |
+| Logging | AWS CloudWatch |
+| Security | Bandit, pip-audit, Trivy |
 
 ---
 
-# 📂 Structure du projet
+# 📁 Project Structure
 
-```text
+```
 docker-api-lab/
 ├── app/
-│   ├── app.py               # Code Flask + Redis
-│   └── __init__.py
+│   ├── app.py
+│   ├── __init__.py
+│   └── config.py
 ├── tests/
-│   └── test_app.py          # Tests unitaires pytest
-├── Dockerfile               # Multi-stage optimisé
-├── docker-compose.yml       # API + Redis
-├── requirements.txt         # Dépendances Python
-├── Makefile                 # Commandes outils
+│   └── test_app.py
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+├── Makefile
 ├── .dockerignore
 ├── .gitignore
 └── .github/workflows/
-    └── ci-cd.yml            # Pipeline CI/CD complet
+    └── ci-cd.yml
 ```
 
 ---
 
-# 🌐 Endpoints API
+# 🧪 Local Usage
 
-| Méthode | URL | Description |
-|--------|-----|-------------|
-| GET | `/health` | Healthcheck |
-| GET | `/info` | Message + hostname du container |
-| GET | `/counter` | Incrémente un compteur Redis |
+### Launch full stack (API + Redis + RedisInsight)
 
----
-
-# 🐳 Docker : Build & Run
-
-### 🔧 Build
-
-```bash
-make build
 ```
-
-### ▶️ Run
-
-```bash
-make run
-```
-
-### Test
-
-```bash
-curl http://localhost:5000/health
-curl http://localhost:5000/info
-curl http://localhost:5000/counter
-```
-
----
-
-# 🧪 Docker Compose (API + Redis)
-
-```bash
 docker compose up -d
 ```
 
----
+### API:
+http://localhost:5000
 
-# ⚙️ Pipeline CI/CD
-
-### ✔️ Lint & Sécurité
-- flake8  
-- Bandit  
-- pip-audit  
-
-### ✔️ Tests
-- pytest + coverage
-
-### ✔️ Build & Publish
-- Docker multi-stage  
-- Tags multiples (`sha`, `latest`, `main`)  
-- GHCR registry  
-
-### ✔️ Scans
-- trivy fs  
-- trivy image  
+### RedisInsight:
+http://localhost:5540
 
 ---
 
-# 🛠️ Makefile
+# ☁️ Cloud Deployment — AWS ECS Fargate
 
-```bash
-make build
-make run
-make stop
-make logs
-make shell
-make clean
+Pipeline steps:
+
+1️⃣ Build Docker image  
+2️⃣ Push GHCR  
+3️⃣ Update ECS Task Definition  
+4️⃣ Deploy new Fargate task  
+5️⃣ Logs streamed into CloudWatch  
+
+```
+ECR → ECS Fargate → Public IP → Internet
 ```
 
 ---
 
-# 🚀 Déploiement (coming soon)
+# 🔥 API Endpoints
 
-Prochaine étape : déploiement automatique sur VM / Cloud.
-
----
-
-# 📌 Idées d'amélioration
-
-- Reverse proxy : Traefik / Nginx  
-- Monitoring Prometheus + Grafana  
-- GitOps (ArgoCD)  
-- Système de logs avancé  
-- Intégration TDD / tests e2e  
+| Method | Route | Description |
+|--------|--------|-------------|
+| GET | `/health` | Container health |
+| GET | `/info` | Hostname + version |
+| GET | `/counter` | Redis‑powered counter |
 
 ---
 
-# 👨‍💻 Auteur
+# 🚀 Future Improvements
 
-Projet développé dans une démarche d’apprentissage DevOps & Platform Engineering.
+- Reverse proxy (Traefik / Nginx)
+- HTTPS + ALB
+- Staging environment + multi-env pipeline
+- Prometheus + Grafana
+- GitOps (ArgoCD)
+- End-to-end testing
+
+---
+
+# 👨‍💻 Author
+
+Project built as part of a professional DevOps & Platform Engineering learning journey.
+
