@@ -49,9 +49,9 @@ This project covers **ALL core skills** of a modern Platform Engineer:
                    │                Local Environment               │
                    │                                                │
                    │   ┌──────────────┐     ┌──────────────┐        │
-                   │   │ Flask API    │<--->│    Redis      │       │
+                   │   │ Flask API    │<--->│    Redis     │        │
                    │   │  Gunicorn    │     └──────────────┘        │
-                   │   └──────────────┘            ▲                │
+                   │   └──────────────┘             ▲                │
                    │            │                   │               │
                    │   ┌────────▼─────────┐         │               │
                    │   │ RedisInsight GUI │─────────┘               │
