@@ -22,7 +22,7 @@
 
 ---
 
-# 🧭 Global Overview
+# 🧭 Global Overview 
 
 This project covers **ALL core skills** of a modern Platform Engineer: 
 
