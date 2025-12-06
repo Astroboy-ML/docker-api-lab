@@ -1,3 +1,4 @@
+# CI/CD complet : lint/tests -> scans -> build/push GHCR+ECR -> déploiement ECS
 name: CI/CD - Docker API
 
 on:
@@ -10,12 +11,14 @@ on:
     branches:
       - main
 
+# Variables globales disponibles dans tous les jobs
 env:
   REGISTRY: ghcr.io
   IMAGE_REPOSITORY: astroboy-ml/docker-api-lab
 
 jobs:
   lint_and_test:
+    # Job principal de qualité : lint, tests, sécurité Python
     name: Lint, Tests & Security (Bandit)
     runs-on: ubuntu-latest
 
@@ -23,32 +26,39 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
+      # Installe Python pour exécuter lint/tests dans un environnement propre
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # Dépendances runtime + outils de qualité (pytest, flake8, bandit, pip-audit)
       - name: Installer les dépendances
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-cov flake8 bandit pip-audit
 
+      # Analyse statique PEP8
       - name: Lint avec flake8
         run: flake8 .
 
+      # Détection de vulnérabilités Python (Bandit)
       - name: Analyse de sécurité Python (Bandit)
         run: bandit -r app -ll
 
+      # Tests unitaires + rapport de couverture
       - name: Lancer les tests avec couverture
         run: |
           pytest --cov=app --cov-report=term-missing
 
+      # Audit des dépendances Python (tolère les CVE connues pour ne pas casser la CI)
       - name: Scan des dépendances Python (pip-audit)
         run: |
           pip-audit || true
 
   security_scan_fs:
+    # Scan Trivy du filesystem du repo avant build d'image
     name: Scan de sécurité Trivy (FS)
     needs: lint_and_test
     runs-on: ubuntu-latest
@@ -57,6 +67,7 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
+      # Analyse Trivy du filesystem (Dockerfile, libs) avant build d'image
       - name: Scan Trivy du filesystem
         uses: aquasecurity/trivy-action@0.28.0
         with:
@@ -68,6 +79,7 @@ jobs:
           exit-code: "0"
 
   build_and_push:
+    # Build de l'image et publication vers GHCR et Amazon ECR
     name: Build & Push Docker image (GHCR + AWS ECR)
     needs:
       - lint_and_test
@@ -83,6 +95,7 @@ jobs:
         uses: actions/checkout@v4
 
       # --- GHCR LOGIN & PUSH ---
+      # Authentifie Docker auprès de GHCR pour push l'image
       - name: Login à GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -90,6 +103,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Génère tags (latest, branches, SHA) et labels
       - name: Génération des métadonnées d'image (tags)
         id: meta
         uses: docker/metadata-action@v5
@@ -102,6 +116,7 @@ jobs:
             type=ref,event=tag
             type=sha
 
+      # Build multi-stage + push automatique vers GHCR avec les tags générés
       - name: Build et push de l'image Docker vers GHCR
         id: build-ghcr
         uses: docker/build-push-action@v6
@@ -112,6 +127,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       # --- AWS ECR LOGIN & PUSH ---
+      # Configure les credentials IAM pour la suite du job (ECR/ECS)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -119,10 +135,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # Récupère le token docker login ECR (et sort la registry `${AWS_ACCOUNT_ID}.dkr.ecr...`)
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      # Récupère l'image GHCR latest, puis la retague pour ECR (latest + SHA)
       - name: Tag image pour Amazon ECR
         env:
           REGISTRY: ${{ env.REGISTRY }}
@@ -138,6 +156,7 @@ jobs:
           docker tag ${REGISTRY}/${IMAGE_REPOSITORY}:latest ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest
           docker tag ${REGISTRY}/${IMAGE_REPOSITORY}:latest ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
 
+      # Push de l'image retaguée vers ECR (latest + SHA)
       - name: Push image vers ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -148,6 +167,7 @@ jobs:
           docker push ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}
 
   trivy_image_scan:
+    # Scan Trivy sur l'image publiée (GHCR) avant déploiement
     name: Scan de l'image Docker (Trivy)
     needs: build_and_push
     runs-on: ubuntu-latest
@@ -164,6 +184,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Trivy scanne l'image GHCR:latest publiée pour détecter vulnérabilités OS/lib
       - name: Scan Trivy de l'image Docker
         uses: aquasecurity/trivy-action@0.28.0
         with:
@@ -175,6 +196,7 @@ jobs:
           exit-code: "0"
 
   deploy_to_ecs:
+    # Déploiement ECS Fargate avec la nouvelle image venant d'ECR
     name: Deploy to ECS Fargate
     needs: build_and_push 
     runs-on: ubuntu-latest
@@ -192,6 +214,7 @@ jobs:
       - name: Checkout du code
         uses: actions/checkout@v4
 
+      # Configure les creds IAM pour ECS/ECR (réutilisés dans les steps suivants)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -199,20 +222,28 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Construit l'URI complet de l'image ECR à déployer (account + repo + SHA)
       - name: Construire l'URI de l'image ECR
         id: image
         run: |
           IMAGE_TAG=${{ github.sha }}
           echo "IMAGE_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
+      # Supprime les lignes de commentaires `//` pour produire un JSON valide utilisé par ECS
+      - name: Préparer la task definition (sans commentaires)
+        run: |
+          python -c "import pathlib; src = pathlib.Path('ecs-taskdef.json').read_text().splitlines(); clean = [line for line in src if not line.strip().startswith('//')]; pathlib.Path('ecs-taskdef.render.json').write_text('\n'.join(clean))"
+
+      # Remplace la définition de tâche avec la nouvelle image
       - name: Rendre la task definition avec la nouvelle image
         id: taskdef
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: ecs-taskdef.json
+          task-definition: ecs-taskdef.render.json
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.image.outputs.IMAGE_URI }}
 
+      # Force un nouveau déploiement du service ECS avec la task definition rendue
       - name: Déployer sur ECS
         uses: aws-actions/amazon-ecs-deploy-task-definition@v1
         with:

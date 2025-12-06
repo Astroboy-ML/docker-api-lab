@@ -75,18 +75,25 @@
                         └───────────────┬───────────────┘
                                         │
                                         ▼
-                      ┌────────────────────────────────────┐
-                      │             AWS Cloud              │
-                      │                                    │
-                      │  ┌──────────────┐   ┌───────────┐  │
-                      │  │  Amazon ECR  │   │ CloudWatch│  │
-                      │  └──────┬───────┘   └─────┬─────┘  │
-                      │         │    image        │ logs   │
-                      │  ┌──────▼─────────┐       │        │
-                      │  │ ECS Fargate    │◄──────┘        │
-                      │  │  Service/Task  │                │
-                      │  └────────────────┘                │
-                      └────────────────────────────────────┘
+                      ┌────────────────────────────────────────────┐
+                      │                 AWS Cloud                  │
+                      │                                            │
+     Clients HTTPS ───┼────▶ Application Load Balancer (TLS 443)  │
+      api.<domaine>   │              │ redirect HTTP→HTTPS         │
+                      │              ▼                             │
+                      │        Target group :5000                  │
+                      │              │                             │
+                      │  ┌───────────▼──────────┐   ┌───────────┐  │
+                      │  │   ECS Fargate        │   │ CloudWatch│  │
+                      │  │   Service/Tasks      │<──┤ Logs      │  │
+                      │  └───────────┬──────────┘   └─────┬─────┘  │
+                      │              │ awsvpc             │ logs   │
+                      │              │                    │        │
+                      │  ┌───────────▼──────────┐         │        │
+                      │  │     Amazon ECR       │─────────┘        │
+                      │  │  (GHCR image sync)   │                  │
+                      │  └──────────────────────┘                  │
+                      └────────────────────────────────────────────┘
 ```
 
 ---
@@ -104,6 +111,7 @@
 | CI/CD | GitHub Actions |
 | Sécurité | flake8, pytest, bandit, pip-audit, Trivy |
 | Cloud | AWS ECS Fargate, Amazon ECR, CloudWatch Logs |
+| Réseau & Entrée | Application Load Balancer (ALB) HTTPS (certificat ACM) + target group ECS |
 
 ```
 docker-api-lab/
@@ -208,7 +216,7 @@ Workflow multi-jobs (`.github/workflows/ci-cd.yml`) :
 
 | Secret | Exemple | Description |
 |--------|---------|-------------|
-| `AWS_ACCOUNT_ID` | `424051098783` | 12 chiffres |
+| `AWS_ACCOUNT_ID` | `<AWS_ACCOUNT_ID>` | 12 chiffres |
 | `AWS_REGION` | `eu-west-3` | Région ECS/ECR |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | — | User/role avec droits ECR/ECS |
 | `ECR_REPOSITORY` | `docker-api-lab` | Nom du repo dans Amazon ECR |
@@ -245,6 +253,45 @@ aws logs create-log-group \
 5. **Service ECS** déjà créé (une fois) et attaché à un load balancer ou IP publique.
 
 Chaque push sur `main` déclenche le workflow et force un nouveau déploiement avec l’image taggée par le SHA courant.
+
+> 💡 Le service ECS est privé (pas d’IP publique) : l’accès se fait via l’ALB `api.<domaine>` qui termine TLS (certificat ACM) et gère la redirection HTTP→HTTPS.
+
+---
+
+## 🌐 Réseau, Load Balancing & HTTPS
+
+L’API est publiée derrière un **Application Load Balancer (ALB)** internet-facing.
+
+### Composants réseau
+
+- **ALB** : `alb-docker-api`
+- **Listeners** :
+  - `HTTP :80` → redirection permanente vers `HTTPS :443`
+  - `HTTPS :443` → certificat TLS ACM pour `api.<domaine>` → forward vers le target group
+- **Target group** : `tg-docker-api`
+  - Type : `IP`
+  - Port cible : `5000`
+  - Health check : `GET /health` (200 attendu)
+- **Service ECS** : attaché au target group en mode `awsvpc`
+
+```
+Client ──▶ HTTP :80 ──▶ ALB ──┐
+                              ├─▶ redirection 301 vers HTTPS :443
+Client ──▶ HTTPS :443 ────────┘
+          (certificat ACM)
+                    │
+                    ▼
+             Target group (5000)
+                    │
+                    ▼
+            Tasks ECS Fargate
+      (Flask + Gunicorn sur 0.0.0.0:5000)
+```
+
+- **TLS** : Certificat ACM pour `api.<domaine>` référencé par le listener HTTPS ; le chiffrement est terminé au niveau du load balancer.
+- **Redirection** : Listener HTTP :80 configuré avec action `Redirect` → HTTPS:443 (`HTTP_301`, host/path/query conservés).
+
+Résultat : `http://api.<domaine>/health` est automatiquement redirigé vers `https://api.<domaine>/health` sans logique spécifique dans Flask.
 
 ---
 
