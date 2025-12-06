@@ -1,234 +1,290 @@
-# 🚀 docker-api-lab — Professional DevOps & Cloud-Native Project
+# 🚀 docker-api-lab — DevOps & Cloud-Native Playground
 
 [![CI/CD - Docker API](https://github.com/Astroboy-ML/docker-api-lab/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Astroboy-ML/docker-api-lab/actions/workflows/ci-cd.yml)
 ![AWS ECS](https://img.shields.io/badge/AWS-ECS%20Fargate-orange)
 ![Docker](https://img.shields.io/badge/Docker-Multi--Stage-blue)
 ![GitHub Actions](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-lightgrey)
 ![Python Version](https://img.shields.io/badge/python-3.12-blue)
-![Flask](https://img.shields.io/badge/flask-API-lightgrey)
-![Gunicorn](https://img.shields.io/badge/gunicorn-production-green)
+![Flask](https://img.shields.io/badge/Flask-API-lightgrey)
+![Gunicorn](https://img.shields.io/badge/Gunicorn-production-green)
 
-> This project demonstrates a **full Cloud-Native & Platform Engineering workflow**, including:
-> - Flask API + Redis  
-> - Docker multi-stage build  
-> - Local multi-service orchestration (docker-compose)  
-> - CI/CD GitHub Actions  
-> - Security scanning (Bandit, pip-audit, Trivy)  
-> - Automatic container build & push  
-> - Automated **AWS ECS Fargate deployment**  
-> - CloudWatch logging + IAM roles  
->  
-> The goal: **demonstrate end‑to‑end DevOps & Cloud platform skills** with production‑grade patterns.
+> Projet showcase pour démontrer un workflow complet **Dev + Sec + Ops** : API Flask, Redis, Docker multi-stage, docker-compose local, CI/CD GitHub Actions, sécurité automatisée, déploiement AWS ECS Fargate et observabilité CloudWatch.
 
 ---
 
-# 🧭 Global Overview 
+## 🧭 Sommaire
 
-This project covers **ALL core skills** of a modern Platform Engineer: 
-
-- API engineering  
-- Containerization & orchestration  
-- CI/CD automation  
-- Cloud deployment (AWS ECS Fargate)  
-- Security & best practices  
-- Documentation & reproducible workflows  
+- [Highlights rapides](#-highlights-rapides)
+- [Architecture & flux](#-architecture--flux)
+- [Stack & structure](#-stack--structure)
+- [Démarrer en local](#-démarrer-en-local)
+- [Qualité & sécurité](#-qualité--sécurité)
+- [Conteneurisation](#-conteneurisation)
+- [Pipeline CI/CD](#-pipeline-cicd)
+- [Déploiement AWS ECS](#-déploiement-aws-ecs)
+- [Opérations & troubleshooting](#-opérations--troubleshooting)
+- [API](#-api)
+- [Roadmap](#-roadmap)
+- [Auteur](#-auteur)
 
 ---
 
-# 🏗️ Architecture — Global View (Cloud + Local)
+## ⚡ Highlights rapides
+
+| Thème | Description |
+|-------|-------------|
+| API & Cache | Flask 3.0 + Gunicorn, Redis pour cache et rate limiting |
+| Local | docker-compose (API + Redis + RedisInsight), Makefile pour builder/run |
+| Qualité | flake8, pytest + coverage, Bandit, pip-audit, Trivy (FS & image) |
+| CI/CD | Workflow GitHub Actions multi-jobs → build/push GHCR + ECR → déploiement ECS |
+| Cloud | Task Fargate `awsvpc`, logs CloudWatch, IAM `ecsTaskExecutionRole` |
+| Observabilité | CloudWatch Logs + endpoints santé/info |
+
+---
+
+## 🏗 Architecture & flux
 
 ```
-                              ┌───────────────────────────────┐
-                              │           Developer           │
-                              │      VS Code / Makefile       │
-                              └───────────────┬───────────────┘
-                                              │
-                                Local testing │ docker compose
-                                              ▼
-                   ┌────────────────────────────────────────────────┐
-                   │                Local Environment               │
-                   │                                                │
-                   │   ┌──────────────┐     ┌──────────────┐        │
-                   │   │ Flask API    │<--->│    Redis     │        │
-                   │   │  Gunicorn    │     └──────────────┘        │
-                   │   └──────────────┘             ▲                │
-                   │            │                   │               │
-                   │   ┌────────▼─────────┐         │               │
-                   │   │ RedisInsight GUI │─────────┘               │
-                   │   └──────────────────┘                         │
-                   └────────────────────────────────────────────────┘
-
-                                      Git Push
-                                         │
-                                         ▼
-
-                          ┌─────────────────────────────────────┐
-                          │          GitHub Actions             │
-                          │   CI/CD: test → scan → build → push │
-                          └───────────────┬─────────────────────┘
+                          ┌───────────────────────────────┐
+                          │     Dev machine / VS Code     │
+                          │  Makefile • docker compose    │
+                          └───────────────┬───────────────┘
                                           │
-                                  Docker Image pushed
+                                docker compose up
+                                          ▼
+                 ┌────────────────────────────────────────────────┐
+                 │                Local Environment               │
+                 │                                                │
+                 │   ┌──────────────┐     ┌──────────────┐        │
+                 │   │ Flask API    │<--->│     Redis    │        │
+                 │   │  Gunicorn    │     └──────────────┘        │
+                 │   └──────────────┘             ▲               │
+                 │            │                   │               │
+                 │   ┌────────▼─────────┐         │               │
+                 │   │ RedisInsight GUI │─────────┘               │
+                 │   └──────────────────┘                         │
+                 └────────────────────────────────────────────────┘
+
+                                      git push
                                           │
                                           ▼
-
-                       ┌──────────────────────────────────────────┐
-                       │                 AWS Cloud                │
-                       │                                          │
-                       │  ┌──────────────┐   ┌────────────────┐   │
-                       │  │ AWS ECR      │   │ CloudWatch Logs│   │
-                       │  │ image store  │   └────────────────┘   │
-                       │  └──────┬───────┘            ▲           │
-                       │         │                    │           │
-                       │  ┌──────▼─────────┐   logs   │           │
-                       │  │ ECS Fargate     │─────────┘           │
-                       │  │ Container Task  │                     │
-                       │  └─────────────────┘                     │
-                       └──────────────────────────────────────────┘
+                        ┌───────────────────────────────┐
+                        │        GitHub Actions         │
+                        │ lint → tests → scans → build  │
+                        │ push GHCR+ECR → deploy ECS    │
+                        └───────────────┬───────────────┘
+                                        │
+                                        ▼
+                      ┌────────────────────────────────────┐
+                      │             AWS Cloud              │
+                      │                                    │
+                      │  ┌──────────────┐   ┌───────────┐  │
+                      │  │  Amazon ECR  │   │ CloudWatch│  │
+                      │  └──────┬───────┘   └─────┬─────┘  │
+                      │         │    image        │ logs   │
+                      │  ┌──────▼─────────┐       │        │
+                      │  │ ECS Fargate    │◄──────┘        │
+                      │  │  Service/Task  │                │
+                      │  └────────────────┘                │
+                      └────────────────────────────────────┘
 ```
 
 ---
 
-# 🚦 CI/CD Pipeline — Professional Diagram
+## 🧱 Stack & structure
 
-```
-                    ┌─────────────────────────┐
-                    │         Developer       │
-                    │        git push         │
-                    └─────────────┬───────────┘
-                                  │
-                                  ▼
-                 ┌────────────────────────────────┐
-                 │    GitHub Actions Pipeline     │
-                 └────────────────┬───────────────┘
-                                  │
-     ┌────────────────────────────▼───────────────────────────────┐
-     │                         CI Phase                           │
-     │────────────────────────────────────────────────────────────│
-     │ Lint      → flake8                                         │
-     │ Tests     → pytest + coverage                              │
-     │ Security  → bandit, pip‑audit, trivy filesystem            │
-     └────────────────────────────┬───────────────────────────────┘
-                                  │
-                                  ▼
-             ┌─────────────────────────────────────────────┐
-             │               Docker Build                  │
-             │        Multi-stage Dockerfile build         │
-             └───────────────────┬─────────────────────────┘
-                                 │
-                                 ▼
-             ┌─────────────────────────────────────────────┐
-             │         Push to GHCR (Container Registry)   │
-             └───────────────────┬─────────────────────────┘
-                                 │
-                                 ▼
-             ┌─────────────────────────────────────────────┐
-             │            CD Phase — AWS Deployment        │
-             │  - Update ECS Task Definition               │
-             │  - Force new deployment                     │
-             └───────────────────┬─────────────────────────┘
-                                 │
-                                 ▼
-                        ┌────────────────┐
-                        │ ECS Fargate    │
-                        │ Running API    │
-                        └────────────────┘
-```
-
----
-
-# 🧱 Stack Technique
-
-| Domain | Component |
-|--------|-----------|
-| Language | Python 3.12 |
+| Domaine | Choix |
+|---------|-------|
+| Langage | Python 3.12 |
 | Framework | Flask |
-| Webserver | Gunicorn |
-| Cache | Redis |
-| Local Orchestration | Docker Compose |
-| Container Build | Docker multi-stage |
+| Webserver prod | Gunicorn |
+| Cache | Redis 7 |
+| Orchestration local | docker-compose |
+| Build | Docker multi-stage |
 | CI/CD | GitHub Actions |
-| Cloud | AWS ECS Fargate + ECR |
-| Logging | AWS CloudWatch |
-| Security | Bandit, pip-audit, Trivy |
-
----
-
-# 📁 Project Structure
+| Sécurité | flake8, pytest, bandit, pip-audit, Trivy |
+| Cloud | AWS ECS Fargate, Amazon ECR, CloudWatch Logs |
 
 ```
 docker-api-lab/
-├── app/
-│   ├── app.py
-│   ├── __init__.py
-│   └── config.py
-├── tests/
-│   └── test_app.py
-├── Dockerfile
-├── docker-compose.yml
+├── app/                # Code Flask + routes Redis
+├── tests/              # pytest
+├── Dockerfile          # multi-stage builder → runtime
+├── docker-compose.yml  # API + Redis + RedisInsight
+├── Makefile            # helpers build/run/logs
 ├── requirements.txt
-├── Makefile
-├── .dockerignore
-├── .gitignore
-└── .github/workflows/
-    └── ci-cd.yml
+└── .github/workflows/ci-cd.yml
 ```
 
 ---
 
-# 🧪 Local Usage
+## 🛠 Démarrer en local
 
-### Launch full stack (API + Redis + RedisInsight)
+### Prérequis
 
+- Docker / Docker Compose v2
+- Python 3.12 (optionnel si exécution via Docker uniquement)
+
+### Setup rapide (compose)
+
+```bash
+# Build + run API + Redis + RedisInsight
+docker compose up --build -d
+
+# Logs API
+docker compose logs -f api
+
+# Arrêt et nettoyage
+docker compose down -v
 ```
-docker compose up -d
+
+### Utilisation du Makefile (mode container seul)
+
+```bash
+make build          # docker build -t docker-api-lab:latest .
+make run            # start container (port 5000)
+make logs           # tail logs
+make shell          # bash dans le container
+make clean          # stop + remove image
 ```
 
-### API:
-http://localhost:5000
+### Exécution pure Python (debug rapide)
 
-### RedisInsight:
-http://localhost:5540
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+FLASK_DEBUG=true flask --app app.app run
+```
 
 ---
 
-# ☁️ Cloud Deployment — AWS ECS Fargate
+## ✅ Qualité & sécurité
 
-Pipeline steps:
-
-1️⃣ Build Docker image  
-2️⃣ Push GHCR  
-3️⃣ Update ECS Task Definition  
-4️⃣ Deploy new Fargate task  
-5️⃣ Logs streamed into CloudWatch  
-
+```bash
+flake8 .
+pytest --cov=app --cov-report=term-missing
+bandit -r app -ll
+pip-audit           # vulnérabilités Python
+trivy fs .          # scan filesystem (ignores unfixed)
 ```
-ECR → ECS Fargate → Public IP → Internet
+
+Ces commandes sont orchestrées automatiquement dans le workflow `CI/CD - Docker API`.
+
+---
+
+## 🐳 Conteneurisation
+
+- **Image multi-stage** (builder → runtime slim) définie dans `Dockerfile`.
+- Variables clés :
+  - `REDIS_HOST` (defaut `redis`)
+  - `REDIS_PORT` (defaut `6379`)
+  - `FLASK_DEBUG` (uniquement local)
+- Docker Compose ajoute Redis et RedisInsight (GUI sur `http://localhost:5540`).
+
+Builder l'image à la main :
+
+```bash
+docker build -t ghcr.io/astroboy-ml/docker-api-lab:dev .
+docker run -p 5000:5000 ghcr.io/astroboy-ml/docker-api-lab:dev
 ```
 
 ---
 
-# 🔥 API Endpoints
+## 🔁 Pipeline CI/CD
+
+Workflow multi-jobs (`.github/workflows/ci-cd.yml`) :
+
+1. **Lint & Tests** – flake8, pytest, Bandit, pip-audit.
+2. **Security Scan (FS)** – Trivy filesystem scan.
+3. **Build & Push** – docker/build-push-action :
+   - Login GHCR.
+   - Génère tags (`latest`, `sha`, etc.).
+   - Push vers GHCR.
+   - Configure AWS creds → login ECR → retag/push (latest + sha).
+4. **Trivy Image Scan** – scan de l’image publiée.
+5. **Deploy to ECS** – render task definition avec nouvelle image ECR puis `amazon-ecs-deploy`.
+
+### Secrets GitHub requis
+
+| Secret | Exemple | Description |
+|--------|---------|-------------|
+| `AWS_ACCOUNT_ID` | `424051098783` | 12 chiffres |
+| `AWS_REGION` | `eu-west-3` | Région ECS/ECR |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | — | User/role avec droits ECR/ECS |
+| `ECR_REPOSITORY` | `docker-api-lab` | Nom du repo dans Amazon ECR |
+
+> Le rôle `ecsTaskExecutionRole` doit posséder `AmazonECSTaskExecutionRolePolicy`.
+
+---
+
+## ☁️ Déploiement AWS ECS
+
+Composants utilisés :
+
+- Cluster : `docker-api-cluster`
+- Service Fargate : `docker-api-container-service-729agg55`
+- Task definition family : `docker-api-task`
+- Réseau : mode `awsvpc` (subnets privés + SG orienté ALB/NAT selon ton infra)
+- Logs : CloudWatch group `/ecs/docker-api-task`, prefix `ecs`
+
+### Checklist avant déploiement
+
+1. **ECR** : repo `${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/docker-api-lab`.
+2. **IAM** :
+   - `ecsTaskExecutionRole` + policy `AmazonECSTaskExecutionRolePolicy`.
+   - Optionnel : `taskRoleArn` si l’app appelle d’autres services AWS.
+3. **CloudWatch Logs** :
+
+```bash
+aws logs create-log-group \
+  --log-group-name /ecs/docker-api-task \
+  --region eu-west-3
+```
+
+4. **Secrets GitHub** validés (voir tableau).
+5. **Service ECS** déjà créé (une fois) et attaché à un load balancer ou IP publique.
+
+Chaque push sur `main` déclenche le workflow et force un nouveau déploiement avec l’image taggée par le SHA courant.
+
+---
+
+## 🩺 Opérations & troubleshooting
+
+| Symptôme | Cause probable | Correctif |
+|----------|----------------|-----------|
+| `InvalidParameterException: registryIds` | `AWS_ACCOUNT_ID` invalide | Vérifier le secret (12 chiffres) |
+| `ResourceInitializationError: CreateLogStream ... log group does not exist` | `/ecs/docker-api-task` absent | Créer le log group (commande ci-dessus) |
+| 429 sur `/limited` | Rate limit 5 req/min par IP | Attendre expiration ou flush Redis |
+| Redis indisponible | Container down ou variable env incorrecte | Vérifier `docker compose ps`, logs `redis` |
+
+Logs CloudWatch disponibles dans le groupe `/ecs/docker-api-task` (region `eu-west-3`).
+
+---
+
+## 🔥 API
 
 | Method | Route | Description |
-|--------|--------|-------------|
-| GET | `/health` | Container health |
-| GET | `/info` | Hostname + version |
-| GET | `/counter` | Redis‑powered counter |
+|--------|-------|-------------|
+| GET | `/health` | Healthcheck |
+| GET | `/info` | Message + hostname du container |
+| GET | `/cache-test` | Round-trip Redis basique |
+| GET | `/counter` | Compteur Redis persistant |
+| GET | `/limited` | Rate limiting (5 req / 60s par IP) |
+| GET | `/slow` | Simule un traitement lent (2s) |
+| GET | `/slow/cached` | Version cache Redis (TTL 10s) |
 
 ---
 
-# 🚀 Future Improvements
+## 🧭 Roadmap
 
-- Reverse proxy (Traefik / Nginx)
-- HTTPS + ALB
-- Staging environment + multi-env pipeline
-- Prometheus + Grafana
-- GitOps (ArgoCD)
-- End-to-end testing
+- Reverse proxy (Traefik / Nginx) + HTTPS via ALB.
+- Environnements multiples (staging/prod) + stratégies GitOps.
+- Observabilité avancée (Prometheus/Grafana, traces).
+- Tests end-to-end + performance.
+- Terraformisation complète (ECS, ECR, IAM, CloudWatch).
 
 ---
 
-# 👨‍💻 Author
+## 👨‍💻 Auteur
 
-Project built as part of a professional DevOps & Platform Engineering learning journey.
-
+Projet construit dans le cadre d’un parcours **DevOps & Platform Engineering**. N’hésite pas à ouvrir des issues / PRs pour échanger ou proposer des améliorations 🙌
