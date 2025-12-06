@@ -24,7 +24,7 @@
 
 # 🧭 Global Overview
 
-This project covers **ALL core skills** of a modern Platform Engineer:
+This project covers **ALL core skills** of a modern Platform Engineer: 
 
 - API engineering  
 - Containerization & orchestration  
