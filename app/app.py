@@ -42,17 +42,17 @@ def health():
     global _last_health_log_ts
     now = time.time()
 
+    # throttle: 1 log / minute / task
     if now - _last_health_log_ts >= HEALTH_LOG_EVERY_SECONDS:
         source = _health_source(request)
 
+        ua = request.headers.get("User-Agent") or "-"
+        xff = request.headers.get("X-Forwarded-For") or "-"
+        remote = request.remote_addr or "-"
+
         logger.info(
-            "Healthcheck appelé (throttled)",
-            extra={
-                "source": source,
-                "remote_addr": request.remote_addr,
-                "user_agent": request.headers.get("User-Agent"),
-                "x_forwarded_for": request.headers.get("X-Forwarded-For"),
-            },
+            "healthcheck ok source=%s ua=%s xff=%s remote=%s",
+            source, ua, xff, remote
         )
         _last_health_log_ts = now
 
