@@ -39,25 +39,23 @@ redis_client = redis.Redis(
 # Endpoint de santé utilisé pour les healthchecks Docker/Kubernetes
 @app.get("/health")
 def health():
-    global _last_health_log_ts
-    now = time.time()
+    source = _health_source(request)
+    ua = request.headers.get("User-Agent") or "-"
+    xff = request.headers.get("X-Forwarded-For") or "-"
+    remote = request.remote_addr or "-"
 
-    # throttle: 1 log / minute / task
-    if now - _last_health_log_ts >= HEALTH_LOG_EVERY_SECONDS:
-        source = _health_source(request)
-
-        ua = request.headers.get("User-Agent") or "-"
-        xff = request.headers.get("X-Forwarded-For") or "-"
-        remote = request.remote_addr or "-"
-
-        logger.info(
-            "healthcheck ok source=%s ua=%s xff=%s remote=%s",
-            source, ua, xff, remote
-        )
-        _last_health_log_ts = now
+    # On log les users, pas l'ALB (ou ALB en throttled)
+    if source == "user":
+        logger.info("healthcheck ok source=%s ua=%s xff=%s remote=%s", source, ua, xff, remote)
+    else:
+        # ALB : throttled 1/min
+        global _last_health_log_ts
+        now = time.time()
+        if now - _last_health_log_ts >= HEALTH_LOG_EVERY_SECONDS:
+            logger.info("healthcheck ok source=%s ua=%s xff=%s remote=%s", source, ua, xff, remote)
+            _last_health_log_ts = now
 
     return {"status": "ok"}, 200
-
 
 # Endpoint d'information retournant un message + le hostname du container
 @app.route("/info")
