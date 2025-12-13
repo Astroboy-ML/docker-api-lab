@@ -44,15 +44,29 @@ def health():
     xff = request.headers.get("X-Forwarded-For") or "-"
     remote = request.remote_addr or "-"
 
+    msg = "healthcheck ok source=%s ua=%s xff=%s remote=%s"
+
     # On log les users, pas l'ALB (ou ALB en throttled)
     if source == "user":
-        logger.info("healthcheck ok source=%s ua=%s xff=%s remote=%s", source, ua, xff, remote)
+        logger.info(
+            msg,
+            source,
+            ua,
+            xff,
+            remote,
+        )
     else:
         # ALB : throttled 1/min
         global _last_health_log_ts
         now = time.time()
         if now - _last_health_log_ts >= HEALTH_LOG_EVERY_SECONDS:
-            logger.info("healthcheck ok source=%s ua=%s xff=%s remote=%s", source, ua, xff, remote)
+            logger.info(
+                msg,
+                source,
+                ua,
+                xff,
+                remote,
+            )
             _last_health_log_ts = now
 
     return {"status": "ok"}, 200
