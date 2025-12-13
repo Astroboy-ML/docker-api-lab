@@ -23,6 +23,7 @@ L’objectif : **construire**, **sécuriser**, **livrer** et **opérer** une app
 
 ### 🧭 Vision cible (plateforme) — schéma Mermaid
 
+```mermaid
 flowchart TB
   Dev["Développeur / Ops"] -->|"PR / push"| CI["CI: Lint • Tests • SAST/SCA • Trivy"]
   CI -->|"Build & push"| Registry["Images immuables<br/>GHCR/ECR<br/>tag: sha + digest"]
@@ -43,7 +44,7 @@ flowchart TB
 
   Guardrails["Guardrails<br/>least privilege<br/>no :latest en prod<br/>rollback"] -.-> CI
   Guardrails -.-> CD
-
+```
 
 ---
 
