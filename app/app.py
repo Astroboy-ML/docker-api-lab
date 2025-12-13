@@ -6,6 +6,9 @@ from flask import Flask, jsonify, request
 import redis
 import time
 
+HEALTH_LOG_EVERY_SECONDS = 60
+_last_health_log_ts = 0
+
 # Configuration basique du logging
 logging.basicConfig(
     level=logging.INFO,
@@ -26,11 +29,24 @@ redis_client = redis.Redis(
 
 
 # Endpoint de santé utilisé pour les healthchecks Docker/Kubernetes
-@app.route("/health")
+@app.get("/health")
 def health():
-    logger.info("Healthcheck appelé")
-    return jsonify(status="ok"), 200
+    global _last_health_log_ts
+    now = time.time()
 
+    # On log au maximum 1 fois toutes les 60 secondes (par task)
+    if now - _last_health_log_ts >= HEALTH_LOG_EVERY_SECONDS:
+        logger.info(
+            "Healthcheck appelé (throttled)",
+            extra={
+                "remote_addr": request.remote_addr,
+                "user_agent": str(request.user_agent),
+                "x_forwarded_for": request.headers.get("X-Forwarded-For"),
+            },
+        )
+        _last_health_log_ts = now
+
+    return {"status": "ok"}, 200
 
 # Endpoint d'information retournant un message + le hostname du container
 @app.route("/info")
