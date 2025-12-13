@@ -9,6 +9,7 @@ import time
 HEALTH_LOG_EVERY_SECONDS = 60
 _last_health_log_ts = 0
 
+
 # Configuration basique du logging
 logging.basicConfig(
     level=logging.INFO,
@@ -47,6 +48,7 @@ def health():
         _last_health_log_ts = now
 
     return {"status": "ok"}, 200
+
 
 # Endpoint d'information retournant un message + le hostname du container
 @app.route("/info")
