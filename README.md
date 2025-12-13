@@ -23,40 +23,27 @@ L’objectif : **construire**, **sécuriser**, **livrer** et **opérer** une app
 
 ### 🧭 Vision cible (plateforme) — schéma Mermaid
 
-```mermaid
 flowchart TB
-  Dev[Développeur / Ops] -->|PR / push| CI[CI: Lint • Tests • SAST/SCA • Trivy]
-  CI -->|Build & push| Registry[(Images immuables
-GHCR/ECR
-(tag sha + digest))]
-  CI -->|IaC| IaC[Terraform / IaC
-(infra versionnée)]
-  CI -->|CD| CD[CD: staging auto
-prod via approval]
+  Dev["Développeur / Ops"] -->|"PR / push"| CI["CI: Lint • Tests • SAST/SCA • Trivy"]
+  CI -->|"Build & push"| Registry["Images immuables<br/>GHCR/ECR<br/>tag: sha + digest"]
+  CI -->|"IaC"| IaC["Terraform / IaC<br/>(infra versionnée)"]
+  CI -->|"CD"| CD["CD: staging auto<br/>prod via approval"]
 
-  subgraph Runtime[Runtime Cloud]
-    ALB[Ingress / ALB
-TLS + redirect] --> ECS[ECS Fargate
-Service/Tasks]
-    ECS --> Logs[CloudWatch Logs]
-    ECS --> Metrics[Metrics
-(CW/Prom)]
-    ECS --> Traces[Traces
-(OpenTelemetry)]
-    ECS --> Secrets[Secrets
-(SSM/Secrets Manager)]
+  subgraph Runtime["Runtime Cloud"]
+    ALB["Ingress / ALB<br/>TLS + redirect"] --> ECS["ECS Fargate<br/>Service/Tasks"]
+    ECS --> Logs["CloudWatch Logs"]
+    ECS --> Metrics["Metrics<br/>CloudWatch / Prom"]
+    ECS --> Traces["Traces<br/>OpenTelemetry"]
+    ECS --> Secrets["Secrets<br/>SSM / Secrets Manager"]
   end
 
   Registry --> CD
   IaC --> CD
   CD --> Runtime
 
-  Guardrails[Guardrails
-least privilege
-no :latest en prod
-rollback] -.-> CI
+  Guardrails["Guardrails<br/>least privilege<br/>no :latest en prod<br/>rollback"] -.-> CI
   Guardrails -.-> CD
-```
+
 
 ---
 
