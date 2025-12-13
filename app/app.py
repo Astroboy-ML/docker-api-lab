@@ -10,6 +10,13 @@ HEALTH_LOG_EVERY_SECONDS = 60
 _last_health_log_ts = 0
 
 
+def _health_source(req) -> str:
+    ua = (req.headers.get("User-Agent") or "").lower()
+    if "elb-healthchecker" in ua:
+        return "alb"
+    return "user"
+
+
 # Configuration basique du logging
 logging.basicConfig(
     level=logging.INFO,
@@ -35,13 +42,15 @@ def health():
     global _last_health_log_ts
     now = time.time()
 
-    # On log au maximum 1 fois toutes les 60 secondes (par task)
     if now - _last_health_log_ts >= HEALTH_LOG_EVERY_SECONDS:
+        source = _health_source(request)
+
         logger.info(
             "Healthcheck appelé (throttled)",
             extra={
+                "source": source,
                 "remote_addr": request.remote_addr,
-                "user_agent": str(request.user_agent),
+                "user_agent": request.headers.get("User-Agent"),
                 "x_forwarded_for": request.headers.get("X-Forwarded-For"),
             },
         )
