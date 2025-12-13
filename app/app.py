@@ -57,6 +57,7 @@ def health():
 
     return {"status": "ok"}, 200
 
+
 # Endpoint d'information retournant un message + le hostname du container
 @app.route("/info")
 def info():
