@@ -1,37 +1,192 @@
-version: "3.9"
+# docker-compose.yml
+#
+# 🧠 Objectif de ce fichier :
+# - Démarrer 4 conteneurs : Traefik (reverse proxy), ton API, Redis, RedisInsight
+# - Exposer les services via des domaines locaux en HTTPS :
+#     https://api.localhost
+#     https://traefik.localhost
+#     https://redis.localhost
+# - Forcer la redirection HTTP -> HTTPS
+# - Protéger le dashboard Traefik par BasicAuth
+# - Ajouter des security headers (HSTS, DENY, nosniff...) via Traefik
 
 services:
+  # ---------------------------------------------------------------------------
+  # 1) TRAEFIK = point d’entrée unique de ton stack
+  # ---------------------------------------------------------------------------
+  # Tout le trafic du navigateur arrive ici.
+  # Traefik lit les "labels" Docker des autres services pour savoir où router.
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+
+    # ✅ "command" = configuration Traefik via arguments CLI.
+    # (équivalent d’un traefik.yml, mais en inline)
+    command:
+      # Active le dashboard Traefik (mais on le route et on le protège nous-mêmes)
+      - "--api.dashboard=true"
+
+      # Dit à Traefik : "observe Docker et lis les labels"
+      - "--providers.docker=true"
+
+      # Important : rien n’est exposé automatiquement.
+      # Seuls les services avec traefik.enable=true seront publiés.
+      - "--providers.docker.exposedbydefault=false"
+
+      # EntryPoints = ports d’entrée de Traefik
+      # web = HTTP
+      - "--entrypoints.web.address=:80"
+      # websecure = HTTPS
+      - "--entrypoints.websecure.address=:443"
+
+      # 🔁 Redirection globale : tout HTTP -> HTTPS
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+
+      # File provider (optionnel ici)
+      # Tu l'utilises pour charger tls.yml (certificat mkcert) depuis ./traefik/dynamic
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+
+    # Ports exposés sur ta machine Windows :
+    ports:
+      - "80:80"    # HTTP (redirigé en HTTPS)
+      - "443:443"  # HTTPS
+
+    # Volumes = "partage" de fichiers entre ta machine et le conteneur
+    volumes:
+      # Traefik lit Docker pour découvrir tes conteneurs/labels (en read-only)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # Certificats mkcert générés en local
+      - ./certs:/certs:ro
+
+      # Config dynamique (ex: tls.yml si tu l’utilises)
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+
+    # Labels sur traefik : ici tu déclares 2 choses :
+    # - Comment exposer le dashboard (router)
+    # - Les middlewares (basic auth + headers de sécurité)
+    labels:
+      - "traefik.enable=true"
+
+      # -------------------
+      # ROUTER: dashboard Traefik
+      # -------------------
+      # Un router = une règle d’entrée "si Host + path => alors service"
+      #
+      # Ici : si on tape https://traefik.localhost/dashboard
+      # alors Traefik sert son dashboard interne (api@internal)
+      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`) && (PathPrefix(`/dashboard`) || PathPrefix(`/api`))"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.service=api@internal"
+
+      # On attache 2 middlewares au dashboard :
+      # 1) basic auth (login/mdp)
+      # 2) security headers (HSTS, DENY, nosniff...)
+      - "traefik.http.routers.traefik.middlewares=traefik-auth,security-headers@docker"
+
+      # -------------------
+      # MIDDLEWARE: Basic Auth (dashboard)
+      # -------------------
+      # ⚠️ les $$ = obligatoire dans docker compose (sinon $ est interprété)
+      - "traefik.http.middlewares.traefik-auth.basicauth.users=admin:$$apr1$$l9jfPwGj$$UIJvBjtqv.eAUjsJdDzbo/"
+
+      # -------------------
+      # MIDDLEWARE: Security headers (pour les apps exposées)
+      # -------------------
+      # camelCase important (Traefik y est sensible)
+      - "traefik.http.middlewares.security-headers.headers.frameDeny=true"
+      - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.security-headers.headers.browserXssFilter=true"
+
+      # HSTS = force HTTPS côté navigateur (max-age 1 an)
+      - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.security-headers.headers.stsPreload=true"
+
+      # (optionnel) utile quand tu débug : preuve que le middleware est appliqué
+      # - "traefik.http.middlewares.security-headers.headers.customResponseHeaders.X-Traefik-Security=on"
+
+    networks:
+      - app_network
+
+  # ---------------------------------------------------------------------------
+  # 2) API = ton application (Flask/Gunicorn) exposée via Traefik
+  # ---------------------------------------------------------------------------
   api:
     build: .
     container_name: docker-api-lab
-    ports:
-      - "5000:5000"
+
+    # Variables d’environnement envoyées au conteneur API
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
+
+    # Labels = comment Traefik doit exposer ton API
+    labels:
+      - "traefik.enable=true"
+
+      # ROUTER: si Host(api.localhost) => service api
+      - "traefik.http.routers.api.rule=Host(`api.localhost`)"
+      - "traefik.http.routers.api.entrypoints=websecure"
+      - "traefik.http.routers.api.tls=true"
+
+      # On applique les security headers à l’API
+      - "traefik.http.routers.api.middlewares=security-headers@docker"
+
+      # SERVICE: sur quel port interne le conteneur écoute ?
+      # (ici ton app écoute sur 5000 dans le conteneur)
+      - "traefik.http.services.api.loadbalancer.server.port=5000"
+
+    # "depends_on" = ordre de démarrage (ça ne garantit pas que redis est prêt,
+    # mais ça évite de lancer l’API avant d’avoir créé le conteneur redis)
     depends_on:
       - redis
+
     networks:
       - app_network
 
+  # ---------------------------------------------------------------------------
+  # 3) REDIS = base/queue/cache (non exposé sur internet)
+  # ---------------------------------------------------------------------------
+  # Aucun port exposé sur ta machine : seul l’API y a accès via le réseau Docker.
   redis:
     image: redis:7-alpine
     container_name: redis
-    ports:
-      - "6379:6379"
     networks:
       - app_network
 
+  # ---------------------------------------------------------------------------
+  # 4) RedisInsight = UI Web pour visualiser Redis (exposée via Traefik)
+  # ---------------------------------------------------------------------------
   redis-insight:
     image: redis/redisinsight:latest
     container_name: redis-insight
-    ports:
-      - "5540:5540"
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redisinsight.rule=Host(`redis.localhost`)"
+      - "traefik.http.routers.redisinsight.entrypoints=websecure"
+      - "traefik.http.routers.redisinsight.tls=true"
+
+      # Security headers aussi sur RedisInsight
+      - "traefik.http.routers.redisinsight.middlewares=security-headers@docker"
+
+      # RedisInsight écoute sur 5540 dans le conteneur
+      - "traefik.http.services.redisinsight.loadbalancer.server.port=5540"
+
     depends_on:
       - redis
+
     networks:
       - app_network
 
+# ---------------------------------------------------------------------------
+# Réseau Docker : permet aux conteneurs de se parler par leur nom de service
+# ex: l’API parle à Redis via "redis:6379"
+# ---------------------------------------------------------------------------
 networks:
   app_network:
     driver: bridge

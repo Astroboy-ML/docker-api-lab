@@ -8,7 +8,55 @@
 ![Flask](https://img.shields.io/badge/Flask-API-lightgrey)
 ![Gunicorn](https://img.shields.io/badge/Gunicorn-production-green)
 
-> Projet showcase pour démontrer un workflow complet **Dev + Sec + Ops** : API Flask, Redis, Docker multi-stage, docker-compose local, CI/CD GitHub Actions, sécurité automatisée, déploiement AWS ECS Fargate et observabilité CloudWatch.
+> Projet showcase pour démontrer un workflow complet **Dev + Sec + Ops** : API Flask, Redis, Docker multi-stage, environnement local HTTPS avec Traefik, CI/CD GitHub Actions, sécurité automatisée, déploiement AWS ECS Fargate et observabilité CloudWatch.
+
+---
+
+## 🎯 La cible que je vise
+
+Je construis ce projet comme une **“prod-like”**  :
+
+- **Platform Engineer / DevOps Engineer (Cloud-Native)**  
+- focus : **containers**, **CI/CD**, **sécurité**, **déploiement cloud**, **observabilité**, **IaC**
+
+L’objectif : **construire**, **sécuriser**, **livrer** et **opérer** une application de bout en bout.
+
+### 🧭 Vision cible (plateforme) — schéma Mermaid
+
+```mermaid
+flowchart TB
+  Dev[Développeur / Ops] -->|PR / push| CI[CI: Lint • Tests • SAST/SCA • Trivy]
+  CI -->|Build & push| Registry[(Images immuables
+GHCR/ECR
+(tag sha + digest))]
+  CI -->|IaC| IaC[Terraform / IaC
+(infra versionnée)]
+  CI -->|CD| CD[CD: staging auto
+prod via approval]
+
+  subgraph Runtime[Runtime Cloud]
+    ALB[Ingress / ALB
+TLS + redirect] --> ECS[ECS Fargate
+Service/Tasks]
+    ECS --> Logs[CloudWatch Logs]
+    ECS --> Metrics[Metrics
+(CW/Prom)]
+    ECS --> Traces[Traces
+(OpenTelemetry)]
+    ECS --> Secrets[Secrets
+(SSM/Secrets Manager)]
+  end
+
+  Registry --> CD
+  IaC --> CD
+  CD --> Runtime
+
+  Guardrails[Guardrails
+least privilege
+no :latest en prod
+rollback] -.-> CI
+  Guardrails -.-> CD
+```
 
 ---
 
@@ -16,12 +64,15 @@
 
 - [Highlights rapides](#-highlights-rapides)
 - [Architecture & flux](#-architecture--flux)
+- [Schéma de l’environnement local](#-schéma-de-lenvironnement-local)
 - [Stack & structure](#-stack--structure)
 - [Démarrer en local](#-démarrer-en-local)
+- [Reverse proxy local (Traefik) + HTTPS](#-reverse-proxy-local-traefik--https)
 - [Qualité & sécurité](#-qualité--sécurité)
 - [Conteneurisation](#-conteneurisation)
 - [Pipeline CI/CD](#-pipeline-cicd)
 - [Déploiement AWS ECS](#-déploiement-aws-ecs)
+- [Réseau, Load Balancing & HTTPS](#-réseau-load-balancing--https)
 - [Opérations & troubleshooting](#-opérations--troubleshooting)
 - [API](#-api)
 - [Roadmap](#-roadmap)
@@ -33,67 +84,60 @@
 
 | Thème | Description |
 |-------|-------------|
-| API & Cache | Flask 3.0 + Gunicorn, Redis pour cache et rate limiting |
-| Local | docker-compose (API + Redis + RedisInsight), Makefile pour builder/run |
+| API & Cache | Flask + Gunicorn, Redis pour cache et rate limiting |
+| Local | docker-compose (Traefik + API + Redis + RedisInsight) |
 | Qualité | flake8, pytest + coverage, Bandit, pip-audit, Trivy (FS & image) |
-| CI/CD | Workflow GitHub Actions multi-jobs → build/push GHCR + ECR → déploiement ECS |
-| Cloud | Task Fargate `awsvpc`, logs CloudWatch, IAM `ecsTaskExecutionRole` |
-| Observabilité | CloudWatch Logs + endpoints santé/info |
+| CI/CD | GitHub Actions multi-jobs → build/push GHCR + ECR → déploiement ECS |
+| Cloud | ECS Fargate `awsvpc`, ALB, logs CloudWatch |
+| Sécurité | Dashboard Traefik protégé, HTTPS local, headers de sécurité |
 
 ---
 
 ## 🏗 Architecture & flux
 
+### Cloud (prod) — vue simple
+```text
+git push
+  │
+  ▼
+GitHub Actions (lint → tests → scans → build/push → deploy ECS)
+  │
+  ▼
+AWS:
+- ECR (image)
+- ECS Fargate (tasks)
+- CloudWatch Logs
+- ALB (TLS + redirect HTTP->HTTPS)
 ```
-                          ┌───────────────────────────────┐
-                          │     Dev machine / VS Code     │
-                          │  Makefile • docker compose    │
-                          └───────────────┬───────────────┘
-                                          │
-                                docker compose up
-                                          ▼
-                 ┌────────────────────────────────────────────────┐
-                 │                Local Environment               │
-                 │                                                │
-                 │   ┌──────────────┐     ┌──────────────┐        │
-                 │   │ Flask API    │<--->│     Redis    │        │
-                 │   │  Gunicorn    │     └──────────────┘        │
-                 │   └──────────────┘             ▲               │
-                 │            │                   │               │
-                 │   ┌────────▼─────────┐         │               │
-                 │   │ RedisInsight GUI │─────────┘               │
-                 │   └──────────────────┘                         │
-                 └────────────────────────────────────────────────┘
 
-                                      git push
-                                          │
-                                          ▼
-                        ┌───────────────────────────────┐
-                        │        GitHub Actions         │
-                        │ lint → tests → scans → build  │
-                        │ push GHCR+ECR → deploy ECS    │
-                        └───────────────┬───────────────┘
-                                        │
-                                        ▼
-                      ┌────────────────────────────────────────────┐
-                      │                 AWS Cloud                  │
-                      │                                            │
-     Clients HTTPS ───┼────▶ Application Load Balancer (TLS 443)  │
-      api.<domaine>   │              │ redirect HTTP→HTTPS         │
-                      │              ▼                             │
-                      │        Target group :5000                  │
-                      │              │                             │
-                      │  ┌───────────▼──────────┐   ┌───────────┐  │
-                      │  │   ECS Fargate        │   │ CloudWatch│  │
-                      │  │   Service/Tasks      │<──┤ Logs      │  │
-                      │  └───────────┬──────────┘   └─────┬─────┘  │
-                      │              │ awsvpc             │ logs   │
-                      │              │                    │        │
-                      │  ┌───────────▼──────────┐         │        │
-                      │  │     Amazon ECR       │─────────┘        │
-                      │  │  (GHCR image sync)   │                  │
-                      │  └──────────────────────┘                  │
-                      └────────────────────────────────────────────┘
+---
+
+## 🧪 Schéma de l’environnement local
+
+```mermaid
+flowchart LR
+  U[Browser / curl.exe] -->|HTTP :80| T[Traefik v3]
+  T -->|308 Redirect| U
+  U -->|HTTPS :443| T
+
+  subgraph Docker[Docker Compose network: app_network]
+    T -->|Host: api.localhost| A[API Flask
+Gunicorn :5000]
+    T -->|Host: redis.localhost| RI[RedisInsight :5540]
+    T -->|Host: traefik.localhost| D[Traefik Dashboard
+api@internal
+BasicAuth]
+    A --> R[(Redis :6379)]
+  end
+
+  Certs[mkcert
+local-cert.pem / local-key.pem] -.-> T
+  Hosts[Windows hosts
+api/traefik/redis.localhost] -.-> U
+  SecHdrs[Security headers
+HSTS • DENY • nosniff] -.-> A
+  SecHdrs -.-> RI
+  SecHdrs -.-> D
 ```
 
 ---
@@ -106,19 +150,21 @@
 | Framework | Flask |
 | Webserver prod | Gunicorn |
 | Cache | Redis 7 |
+| Reverse proxy local | Traefik v3 (HTTPS + BasicAuth + security headers) |
 | Orchestration local | docker-compose |
 | Build | Docker multi-stage |
 | CI/CD | GitHub Actions |
-| Sécurité | flake8, pytest, bandit, pip-audit, Trivy |
 | Cloud | AWS ECS Fargate, Amazon ECR, CloudWatch Logs |
-| Réseau & Entrée | Application Load Balancer (ALB) HTTPS (certificat ACM) + target group ECS |
+| Réseau & Entrée | ALB HTTPS (ACM) + target group ECS |
 
 ```
 docker-api-lab/
 ├── app/                # Code Flask + routes Redis
 ├── tests/              # pytest
 ├── Dockerfile          # multi-stage builder → runtime
-├── docker-compose.yml  # API + Redis + RedisInsight
+├── docker-compose.yml  # Traefik + API + Redis + RedisInsight
+├── certs/              # certs mkcert (local only, non commit)
+├── traefik/dynamic/    # tls.yml (local only)
 ├── Makefile            # helpers build/run/logs
 ├── requirements.txt
 └── .github/workflows/ci-cd.yml
@@ -129,39 +175,53 @@ docker-api-lab/
 ## 🛠 Démarrer en local
 
 ### Prérequis
-
 - Docker / Docker Compose v2
-- Python 3.12 (optionnel si exécution via Docker uniquement)
+- (Optionnel) Python 3.12 si exécution hors Docker
 
 ### Setup rapide (compose)
-
 ```bash
-# Build + run API + Redis + RedisInsight
 docker compose up --build -d
-
-# Logs API
 docker compose logs -f api
-
-# Arrêt et nettoyage
 docker compose down -v
 ```
 
-### Utilisation du Makefile (mode container seul)
+---
 
-```bash
-make build          # docker build -t docker-api-lab:latest .
-make run            # start container (port 5000)
-make logs           # tail logs
-make shell          # bash dans le container
-make clean          # stop + remove image
+## 🔀 Reverse proxy local (Traefik) + HTTPS
+
+### Local domains
+- API: `https://api.localhost/health`
+- Dashboard Traefik: `https://traefik.localhost/dashboard/`
+- RedisInsight: `https://redis.localhost/`
+
+### Hosts Windows
+Édite (en admin) : `C:\Windows\System32\drivers\etc\hosts`
+
+```txt
+127.0.0.1 api.localhost
+127.0.0.1 traefik.localhost
+127.0.0.1 redis.localhost
 ```
 
-### Exécution pure Python (debug rapide)
+Puis :
+```powershell
+ipconfig /flushdns
+```
 
-```bash
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-FLASK_DEBUG=true flask --app app.app run
+### mkcert (Windows)
+```powershell
+mkcert -install
+mkdir certs
+mkcert -cert-file certs/local-cert.pem -key-file certs/local-key.pem api.localhost traefik.localhost redis.localhost
+```
+
+### Tests rapides (Windows)
+> Dans PowerShell, `curl` est un alias : utilise `curl.exe`.
+
+```powershell
+curl.exe -I http://api.localhost/health
+curl.exe -I -k --ssl-no-revoke https://api.localhost/health
+curl.exe -I -k --ssl-no-revoke https://traefik.localhost/dashboard/
 ```
 
 ---
@@ -172,25 +232,22 @@ FLASK_DEBUG=true flask --app app.app run
 flake8 .
 pytest --cov=app --cov-report=term-missing
 bandit -r app -ll
-pip-audit           # vulnérabilités Python
-trivy fs .          # scan filesystem (ignores unfixed)
+pip-audit
+trivy fs .
 ```
-
-Ces commandes sont orchestrées automatiquement dans le workflow `CI/CD - Docker API`.
 
 ---
 
 ## 🐳 Conteneurisation
 
-- **Image multi-stage** (builder → runtime slim) définie dans `Dockerfile`.
-- Variables clés :
-  - `REDIS_HOST` (defaut `redis`)
-  - `REDIS_PORT` (defaut `6379`)
-  - `FLASK_DEBUG` (uniquement local)
-- Docker Compose ajoute Redis et RedisInsight (GUI sur `http://localhost:5540`).
+- **Image multi-stage** (builder → runtime slim) dans `Dockerfile`
+- Bonnes pratiques :
+  - runtime slim
+  - utilisateur non-root
+  - exécution prod via Gunicorn
+  - séparation builder/runtime
 
-Builder l'image à la main :
-
+Build & run à la main :
 ```bash
 docker build -t ghcr.io/astroboy-ml/docker-api-lab:dev .
 docker run -p 5000:5000 ghcr.io/astroboy-ml/docker-api-lab:dev
@@ -204,13 +261,13 @@ Workflow multi-jobs (`.github/workflows/ci-cd.yml`) :
 
 1. **Lint & Tests** – flake8, pytest, Bandit, pip-audit.
 2. **Security Scan (FS)** – Trivy filesystem scan.
-3. **Build & Push** – docker/build-push-action :
+3. **Build & Push** – build-push-action :
    - Login GHCR.
-   - Génère tags (`latest`, `sha`, etc.).
-   - Push vers GHCR.
-   - Configure AWS creds → login ECR → retag/push (latest + sha).
+   - Tags (`latest`, `sha`, etc.).
+   - Push GHCR.
+   - Login ECR → retag/push (latest + sha).
 4. **Trivy Image Scan** – scan de l’image publiée.
-5. **Deploy to ECS** – render task definition avec nouvelle image ECR puis `amazon-ecs-deploy`.
+5. **Deploy to ECS** – render task definition puis déploiement du service ECS.
 
 ### Secrets GitHub requis
 
@@ -219,79 +276,27 @@ Workflow multi-jobs (`.github/workflows/ci-cd.yml`) :
 | `AWS_ACCOUNT_ID` | `<AWS_ACCOUNT_ID>` | 12 chiffres |
 | `AWS_REGION` | `eu-west-3` | Région ECS/ECR |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | — | User/role avec droits ECR/ECS |
-| `ECR_REPOSITORY` | `docker-api-lab` | Nom du repo dans Amazon ECR |
-
-> Le rôle `ecsTaskExecutionRole` doit posséder `AmazonECSTaskExecutionRolePolicy`.
+| `ECR_REPOSITORY` | `docker-api-lab` | Repo ECR |
 
 ---
 
 ## ☁️ Déploiement AWS ECS
 
-Composants utilisés :
-
+Composants utilisés (exemple) :
 - Cluster : `docker-api-cluster`
-- Service Fargate : `docker-api-container-service-729agg55`
 - Task definition family : `docker-api-task`
-- Réseau : mode `awsvpc` (subnets privés + SG orienté ALB/NAT selon ton infra)
-- Logs : CloudWatch group `/ecs/docker-api-task`, prefix `ecs`
-
-### Checklist avant déploiement
-
-1. **ECR** : repo `${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/docker-api-lab`.
-2. **IAM** :
-   - `ecsTaskExecutionRole` + policy `AmazonECSTaskExecutionRolePolicy`.
-   - Optionnel : `taskRoleArn` si l’app appelle d’autres services AWS.
-3. **CloudWatch Logs** :
-
-```bash
-aws logs create-log-group \
-  --log-group-name /ecs/docker-api-task \
-  --region eu-west-3
-```
-
-4. **Secrets GitHub** validés (voir tableau).
-5. **Service ECS** déjà créé (une fois) et attaché à un load balancer ou IP publique.
-
-Chaque push sur `main` déclenche le workflow et force un nouveau déploiement avec l’image taggée par le SHA courant.
-
-> 💡 Le service ECS est privé (pas d’IP publique) : l’accès se fait via l’ALB `api.<domaine>` qui termine TLS (certificat ACM) et gère la redirection HTTP→HTTPS.
+- Réseau : `awsvpc`
+- Logs : CloudWatch group `/ecs/docker-api-task`
 
 ---
 
 ## 🌐 Réseau, Load Balancing & HTTPS
 
-L’API est publiée derrière un **Application Load Balancer (ALB)** internet-facing.
+En production, l’API est publiée derrière un **Application Load Balancer (ALB)**.
 
-### Composants réseau
-
-- **ALB** : `alb-docker-api`
-- **Listeners** :
-  - `HTTP :80` → redirection permanente vers `HTTPS :443`
-  - `HTTPS :443` → certificat TLS ACM pour `api.<domaine>` → forward vers le target group
-- **Target group** : `tg-docker-api`
-  - Type : `IP`
-  - Port cible : `5000`
-  - Health check : `GET /health` (200 attendu)
-- **Service ECS** : attaché au target group en mode `awsvpc`
-
-```
-Client ──▶ HTTP :80 ──▶ ALB ──┐
-                              ├─▶ redirection 301 vers HTTPS :443
-Client ──▶ HTTPS :443 ────────┘
-          (certificat ACM)
-                    │
-                    ▼
-             Target group (5000)
-                    │
-                    ▼
-            Tasks ECS Fargate
-      (Flask + Gunicorn sur 0.0.0.0:5000)
-```
-
-- **TLS** : Certificat ACM pour `api.<domaine>` référencé par le listener HTTPS ; le chiffrement est terminé au niveau du load balancer.
-- **Redirection** : Listener HTTP :80 configuré avec action `Redirect` → HTTPS:443 (`HTTP_301`, host/path/query conservés).
-
-Résultat : `http://api.<domaine>/health` est automatiquement redirigé vers `https://api.<domaine>/health` sans logique spécifique dans Flask.
+- Listener `HTTP :80` → redirection vers `HTTPS :443`
+- Listener `HTTPS :443` → certificat ACM → forward vers target group
+- Target group : type `IP`, port cible `5000`, health check `GET /health`
 
 ---
 
@@ -299,12 +304,10 @@ Résultat : `http://api.<domaine>/health` est automatiquement redirigé vers `ht
 
 | Symptôme | Cause probable | Correctif |
 |----------|----------------|-----------|
-| `InvalidParameterException: registryIds` | `AWS_ACCOUNT_ID` invalide | Vérifier le secret (12 chiffres) |
-| `ResourceInitializationError: CreateLogStream ... log group does not exist` | `/ecs/docker-api-task` absent | Créer le log group (commande ci-dessus) |
-| 429 sur `/limited` | Rate limit 5 req/min par IP | Attendre expiration ou flush Redis |
-| Redis indisponible | Container down ou variable env incorrecte | Vérifier `docker compose ps`, logs `redis` |
-
-Logs CloudWatch disponibles dans le groupe `/ecs/docker-api-task` (region `eu-west-3`).
+| `InvalidParameterException: registryIds` | `AWS_ACCOUNT_ID` invalide | Vérifier secret (12 chiffres) |
+| `CreateLogStream ... log group does not exist` | log group absent | Créer `/ecs/docker-api-task` |
+| 429 sur `/limited` | rate limit | attendre / flush Redis |
+| Redis indisponible | conteneur down / env incorrecte | `docker compose ps` + logs |
 
 ---
 
@@ -313,25 +316,23 @@ Logs CloudWatch disponibles dans le groupe `/ecs/docker-api-task` (region `eu-we
 | Method | Route | Description |
 |--------|-------|-------------|
 | GET | `/health` | Healthcheck |
-| GET | `/info` | Message + hostname du container |
-| GET | `/cache-test` | Round-trip Redis basique |
-| GET | `/counter` | Compteur Redis persistant |
-| GET | `/limited` | Rate limiting (5 req / 60s par IP) |
-| GET | `/slow` | Simule un traitement lent (2s) |
+| GET | `/info` | Message + hostname |
+| GET | `/cache-test` | Test Redis |
+| GET | `/counter` | Compteur Redis |
+| GET | `/limited` | Rate limiting (5 req / 60s / IP) |
+| GET | `/slow` | Simule une latence (2s) |
 | GET | `/slow/cached` | Version cache Redis (TTL 10s) |
 
 ---
 
 ## 🧭 Roadmap
 
-- Reverse proxy (Traefik / Nginx) + HTTPS via ALB.
-- Environnements multiples (staging/prod) + stratégies GitOps.
-- Observabilité avancée (Prometheus/Grafana, traces).
-- Tests end-to-end + performance.
-- Terraformisation complète (ECS, ECR, IAM, CloudWatch).
+- Terraformisation complète (ECS, ECR, IAM, CloudWatch, ALB)
+- Environnements (staging/prod), stratégie de release
+- Observabilité avancée (metrics/traces)
+- Tests E2E + perf
+- GitOps (optionnel) : ArgoCD/Flux sur un cluster de démo
 
 ---
 
-## 👨‍💻 Auteur
 
-Projet construit dans le cadre d’un parcours **DevOps & Platform Engineering**. N’hésite pas à ouvrir des issues / PRs pour échanger ou proposer des améliorations 🙌
